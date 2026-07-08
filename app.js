@@ -54,10 +54,10 @@ const pageLoaders = {
 };
 function showPage(name) {
   $$('.page').forEach(p => p.classList.toggle('active', p.id === 'page-' + name));
-  $$('.nav-btn').forEach(b => b.classList.toggle('active', b.dataset.page === name));
+  $$('.nav-btn, .top-nav-link[data-page]').forEach(b => b.classList.toggle('active', b.dataset.page === name));
   (pageLoaders[name] || (() => {}))().catch?.(e => toast(e.message));
 }
-$$('.nav-btn').forEach(b => b.addEventListener('click', () => showPage(b.dataset.page)));
+$$('.nav-btn, .top-nav-link[data-page]').forEach(b => b.addEventListener('click', () => showPage(b.dataset.page)));
 
 // ---------------- Categories cache ----------------
 let CATS = { types: [], groups: [] };
@@ -192,13 +192,13 @@ async function loadDashboard() {
   // ----- Charts -----
   // Setup Chart.js global settings for the premium dark glass theme
   if (typeof Chart !== 'undefined') {
-    Chart.defaults.color = '#8AA09A'; // var(--text-muted)
+    Chart.defaults.color = '#718096'; // var(--text-muted)
     Chart.defaults.font.family = "'Outfit', 'Be Vietnam Pro', sans-serif";
     Chart.defaults.font.size = 11;
   }
 
   const catLabels = Object.keys(d.expenseByCategory);
-  const GLASS_PALETTE = ['#FF8C42', '#FFD700', '#FF7F50', '#FFB347', '#E67A38', '#FF9F5F', '#FFA07A', '#FF4500', '#FF6347', '#D2691E', '#CD5C5C', '#F4A460'];
+  const NESTED_PALETTE = ['#2A7A8C', '#38B2AC', '#E6B5A1', '#F6AD55', '#4F6773', '#CBD5E0', '#FBD38D', '#81E6D9', '#E2E8F0'];
 
   makeChart('chart-category', {
     type: 'doughnut',
@@ -206,9 +206,9 @@ async function loadDashboard() {
       labels: catLabels, 
       datasets: [{ 
         data: catLabels.map(k => d.expenseByCategory[k]), 
-        backgroundColor: GLASS_PALETTE, 
-        borderWidth: 1.5,
-        borderColor: 'rgba(26, 37, 44, 0.6)'
+        backgroundColor: NESTED_PALETTE, 
+        borderWidth: 2,
+        borderColor: '#FFFFFF'
       }] 
     },
     options: { 
@@ -217,7 +217,7 @@ async function loadDashboard() {
         legend: { 
           position: 'right',
           labels: {
-            color: '#F2F7F5',
+            color: '#2D3748',
             font: { weight: 500 },
             boxWidth: 10,
             padding: 12
@@ -231,8 +231,8 @@ async function loadDashboard() {
   const canvasDaily = $('#chart-daily');
   const ctxDaily = canvasDaily.getContext('2d');
   const gradDaily = ctxDaily.createLinearGradient(0, 0, 0, 180);
-  gradDaily.addColorStop(0, 'rgba(255, 127, 80, 0.35)');
-  gradDaily.addColorStop(1, 'rgba(255, 127, 80, 0.0)');
+  gradDaily.addColorStop(0, 'rgba(56, 178, 172, 0.35)'); /* Teal */
+  gradDaily.addColorStop(1, 'rgba(56, 178, 172, 0.0)');
 
   makeChart('chart-daily', {
     type: 'line',
@@ -241,14 +241,14 @@ async function loadDashboard() {
       datasets: [{ 
         label: 'Chi tiêu', 
         data: days.map(k => d.dailyTrend[k]), 
-        borderColor: '#FF7F50', 
+        borderColor: '#38B2AC', 
         borderWidth: 3,
         backgroundColor: gradDaily, 
         fill: true, 
         tension: .38, 
         pointRadius: 2,
         pointHoverRadius: 5,
-        pointBackgroundColor: '#FF7F50',
+        pointBackgroundColor: '#38B2AC',
         pointBorderColor: '#FFFFFF'
       }] 
     },
@@ -256,12 +256,12 @@ async function loadDashboard() {
       plugins: { legend: { display: false } },
       scales: {
         x: {
-          grid: { color: 'rgba(255, 255, 255, 0.03)', drawBorder: false },
-          ticks: { color: '#8AA09A' }
+          grid: { color: 'rgba(0, 0, 0, 0.05)', drawBorder: false },
+          ticks: { color: '#718096' }
         },
         y: {
-          grid: { color: 'rgba(255, 255, 255, 0.03)', drawBorder: false },
-          ticks: { color: '#8AA09A' }
+          grid: { color: 'rgba(0, 0, 0, 0.05)', drawBorder: false },
+          ticks: { color: '#718096' }
         }
       }
     }
@@ -271,8 +271,8 @@ async function loadDashboard() {
   const canvasMonthly = $('#chart-monthly');
   const ctxMonthly = canvasMonthly.getContext('2d');
   const gradMonthly = ctxMonthly.createLinearGradient(0, 0, 0, 180);
-  gradMonthly.addColorStop(0, 'rgba(255, 140, 66, 0.7)');
-  gradMonthly.addColorStop(1, 'rgba(255, 140, 66, 0.05)');
+  gradMonthly.addColorStop(0, 'rgba(42, 122, 140, 0.7)'); /* Deep Teal */
+  gradMonthly.addColorStop(1, 'rgba(42, 122, 140, 0.1)');
 
   makeChart('chart-monthly', {
     type: 'bar',
@@ -282,7 +282,7 @@ async function loadDashboard() {
         label: 'Chi tiêu', 
         data: mt.map(x => x.expense), 
         backgroundColor: gradMonthly, 
-        borderColor: 'rgba(255, 140, 66, 0.3)',
+        borderColor: 'rgba(42, 122, 140, 0.9)',
         borderWidth: 1,
         borderRadius: 6 
       }] 
@@ -291,12 +291,12 @@ async function loadDashboard() {
       plugins: { legend: { display: false } },
       scales: {
         x: {
-          grid: { color: 'rgba(255, 255, 255, 0.03)', drawBorder: false },
-          ticks: { color: '#8AA09A' }
+          grid: { color: 'rgba(0, 0, 0, 0.05)', drawBorder: false },
+          ticks: { color: '#718096' }
         },
         y: {
-          grid: { color: 'rgba(255, 255, 255, 0.03)', drawBorder: false },
-          ticks: { color: '#8AA09A' }
+          grid: { color: 'rgba(0, 0, 0, 0.05)', drawBorder: false },
+          ticks: { color: '#718096' }
         }
       }
     }
