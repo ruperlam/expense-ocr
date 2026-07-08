@@ -101,7 +101,7 @@ function setHealthScore(score, label) {
   if (!gauge) return;
   gauge.style.setProperty('--pct', score);
   gauge.style.setProperty('--gauge-color',
-    score >= 75 ? '#8FD0B5' : score >= 50 ? '#F0C883' : '#F0A28E');
+    score >= 75 ? '#4FD1A5' : score >= 50 ? '#ECC07B' : '#F3A390');
   $('#health-score').textContent = score;
   $('#health-label').textContent = label;
 }
@@ -185,35 +185,176 @@ async function loadDashboard() {
     alerts.push(`<div class="alert">🧾 Có ${d.kpi.pendingReviews} hóa đơn OCR đang chờ duyệt.</div>`);
   if (!alerts.length || (mb.length && !overCount && !warnCount))
     alerts.push(`<div class="alert ok">✅ Nếu giữ nhịp chi hiện tại, bạn đang trong tầm kiểm soát tháng này.</div>`);
+  if (score >= 85)
+    alerts.push(`<div class="alert ok">✨ Điểm sức khỏe tài chính rất tốt (${score}/100)! Tiếp tục duy trì nhé.</div>`);
   $('#dash-alerts').innerHTML = alerts.join('');
 
   // ----- Charts -----
+  // Setup Chart.js global settings for the premium dark glass theme
+  if (typeof Chart !== 'undefined') {
+    Chart.defaults.color = '#8AA09A'; // var(--text-muted)
+    Chart.defaults.font.family = "'Outfit', 'Be Vietnam Pro', sans-serif";
+    Chart.defaults.font.size = 11;
+  }
+
   const catLabels = Object.keys(d.expenseByCategory);
+  const GLASS_PALETTE = ['#FF8C42', '#FFD700', '#FF7F50', '#FFB347', '#E67A38', '#FF9F5F', '#FFA07A', '#FF4500', '#FF6347', '#D2691E', '#CD5C5C', '#F4A460'];
+
   makeChart('chart-category', {
     type: 'doughnut',
-    data: { labels: catLabels, datasets: [{ data: catLabels.map(k => d.expenseByCategory[k]), backgroundColor: PALETTE, borderWidth: 0 }] },
-    options: { cutout: '62%', plugins: { legend: { position: 'right' } } }
+    data: { 
+      labels: catLabels, 
+      datasets: [{ 
+        data: catLabels.map(k => d.expenseByCategory[k]), 
+        backgroundColor: GLASS_PALETTE, 
+        borderWidth: 1.5,
+        borderColor: 'rgba(26, 37, 44, 0.6)'
+      }] 
+    },
+    options: { 
+      cutout: '70%', 
+      plugins: { 
+        legend: { 
+          position: 'right',
+          labels: {
+            color: '#F2F7F5',
+            font: { weight: 500 },
+            boxWidth: 10,
+            padding: 12
+          }
+        } 
+      } 
+    }
   });
 
   const days = Object.keys(d.dailyTrend).sort();
+  const canvasDaily = $('#chart-daily');
+  const ctxDaily = canvasDaily.getContext('2d');
+  const gradDaily = ctxDaily.createLinearGradient(0, 0, 0, 180);
+  gradDaily.addColorStop(0, 'rgba(255, 127, 80, 0.35)');
+  gradDaily.addColorStop(1, 'rgba(255, 127, 80, 0.0)');
+
   makeChart('chart-daily', {
     type: 'line',
-    data: { labels: days.map(x => x.slice(8)), datasets: [{ label: 'Chi tiêu', data: days.map(k => d.dailyTrend[k]), borderColor: C_DOWN, backgroundColor: 'rgba(243,195,178,.35)', fill: true, tension: .35, pointRadius: 3 }] },
-    options: { plugins: { legend: { display: false } } }
+    data: { 
+      labels: days.map(x => x.slice(8)), 
+      datasets: [{ 
+        label: 'Chi tiêu', 
+        data: days.map(k => d.dailyTrend[k]), 
+        borderColor: '#FF7F50', 
+        borderWidth: 3,
+        backgroundColor: gradDaily, 
+        fill: true, 
+        tension: .38, 
+        pointRadius: 2,
+        pointHoverRadius: 5,
+        pointBackgroundColor: '#FF7F50',
+        pointBorderColor: '#FFFFFF'
+      }] 
+    },
+    options: { 
+      plugins: { legend: { display: false } },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255, 255, 255, 0.03)', drawBorder: false },
+          ticks: { color: '#8AA09A' }
+        },
+        y: {
+          grid: { color: 'rgba(255, 255, 255, 0.03)', drawBorder: false },
+          ticks: { color: '#8AA09A' }
+        }
+      }
+    }
   });
 
   const mt = trend;
+  const canvasMonthly = $('#chart-monthly');
+  const ctxMonthly = canvasMonthly.getContext('2d');
+  const gradMonthly = ctxMonthly.createLinearGradient(0, 0, 0, 180);
+  gradMonthly.addColorStop(0, 'rgba(255, 140, 66, 0.7)');
+  gradMonthly.addColorStop(1, 'rgba(255, 140, 66, 0.05)');
+
   makeChart('chart-monthly', {
     type: 'bar',
-    data: { labels: mt.map(x => x.month), datasets: [{ label: 'Chi tiêu', data: mt.map(x => x.expense), backgroundColor: '#657166', borderRadius: 8 }] },
-    options: { plugins: { legend: { display: false } } }
+    data: { 
+      labels: mt.map(x => x.month), 
+      datasets: [{ 
+        label: 'Chi tiêu', 
+        data: mt.map(x => x.expense), 
+        backgroundColor: gradMonthly, 
+        borderColor: 'rgba(255, 140, 66, 0.3)',
+        borderWidth: 1,
+        borderRadius: 6 
+      }] 
+    },
+    options: { 
+      plugins: { legend: { display: false } },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255, 255, 255, 0.03)', drawBorder: false },
+          ticks: { color: '#8AA09A' }
+        },
+        y: {
+          grid: { color: 'rgba(255, 255, 255, 0.03)', drawBorder: false },
+          ticks: { color: '#8AA09A' }
+        }
+      }
+    }
   });
+
+  const canvasIncExp = $('#chart-income-expense');
+  const ctxIncExp = canvasIncExp.getContext('2d');
+  
+  const gradInc = ctxIncExp.createLinearGradient(0, 0, 0, 180);
+  gradInc.addColorStop(0, 'rgba(79, 209, 165, 0.7)');
+  gradInc.addColorStop(1, 'rgba(79, 209, 165, 0.05)');
+
+  const gradExp = ctxIncExp.createLinearGradient(0, 0, 0, 180);
+  gradExp.addColorStop(0, 'rgba(243, 163, 144, 0.7)');
+  gradExp.addColorStop(1, 'rgba(243, 163, 144, 0.05)');
+
   makeChart('chart-income-expense', {
     type: 'bar',
-    data: { labels: mt.map(x => x.month), datasets: [
-      { label: 'Thu nhập', data: mt.map(x => x.income), backgroundColor: C_UP, borderRadius: 8 },
-      { label: 'Chi tiêu', data: mt.map(x => x.expense), backgroundColor: C_DOWN, borderRadius: 8 }
-    ] }
+    data: { 
+      labels: mt.map(x => x.month), 
+      datasets: [
+        { 
+          label: 'Thu nhập', 
+          data: mt.map(x => x.income), 
+          backgroundColor: gradInc, 
+          borderColor: 'rgba(79, 209, 165, 0.3)',
+          borderWidth: 1,
+          borderRadius: 6 
+        },
+        { 
+          label: 'Chi tiêu', 
+          data: mt.map(x => x.expense), 
+          backgroundColor: gradExp, 
+          borderColor: 'rgba(243, 163, 144, 0.3)',
+          borderWidth: 1,
+          borderRadius: 6 
+        }
+      ] 
+    },
+    options: { 
+      plugins: { 
+        legend: { 
+          display: true,
+          position: 'top',
+          labels: { color: '#F2F7F5' }
+        } 
+      },
+      scales: {
+        x: {
+          grid: { color: 'rgba(255, 255, 255, 0.03)', drawBorder: false },
+          ticks: { color: '#8AA09A' }
+        },
+        y: {
+          grid: { color: 'rgba(255, 255, 255, 0.03)', drawBorder: false },
+          ticks: { color: '#8AA09A' }
+        }
+      }
+    }
   });
 
   // ----- Budgets -----
