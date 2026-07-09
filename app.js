@@ -50,7 +50,8 @@ function loader(on, text = 'Đang xử lý…') {
 const pageLoaders = {
   dashboard: loadDashboard, transactions: loadTransactions, review: loadReviewList,
   budgets: loadBudgets, categories: loadCategoriesPage, rules: loadRules,
-  settings: loadSettingsPage, logs: loadLogs, upload: () => {}
+  settings: loadSettingsPage, logs: loadLogs, upload: () => {},
+  income: loadIncomePage, expense: loadExpensePage, debts: loadDebtsPage
 };
 function showPage(name) {
   $$('.page').forEach(p => p.classList.toggle('active', p.id === 'page-' + name));
@@ -84,16 +85,34 @@ function makeChart(id, config) {
 }
 const PALETTE = ['#657166','#99CDD8','#F3C3B2','#CFD6C4','#DBA24A','#4E8577',
                  '#D3705B','#7FA8B8','#B98E6A','#8AA398','#C9A0A0','#6F7F7A','#3C6A5E'];
+const NESTED_PALETTE = ['#2A7A8C', '#38B2AC', '#E6B5A1', '#F6AD55', '#4F6773', '#CBD5E0', '#FBD38D', '#81E6D9', '#E2E8F0'];
 const C_UP = '#3E8E6E', C_DOWN = '#D3705B';
 
+// Chart.js global theme (Outfit font, muted axis text) — set once, applies to every chart on every page.
+if (typeof Chart !== 'undefined') {
+  Chart.defaults.color = '#718096';
+  Chart.defaults.font.family = "'Outfit', 'Be Vietnam Pro', sans-serif";
+  Chart.defaults.font.size = 11;
+}
+
+/** Standard ranked-list markup shared by Dashboard/Income/Expense top-N panels. */
+function rankListHTML(arr, total) {
+  return (arr || []).map((x, i) =>
+    `<div class="rank-row"><span class="rank-num">${i + 1}</span>
+      <span class="rank-name">${esc(x.name)}</span>
+      <span class="rank-amt">${fmtVND(x.amount)}</span>
+      <span class="rank-pct">${total ? Math.round(x.amount / total * 100) + '%' : ''}</span></div>`
+  ).join('') || '<p class="muted">Chưa có dữ liệu.</p>';
+}
+
 /** % change vs previous value, rendered as a colored delta line. */
-function deltaHTML(cur, prev, { invert = false } = {}) {
+function deltaHTML(cur, prev, { invert = false, label = 'so với tháng trước' } = {}) {
   if (prev === undefined || prev === null || prev === 0) return '';
   const pct = Math.round((cur - prev) / Math.abs(prev) * 100);
   if (!isFinite(pct)) return '';
   const good = invert ? pct <= 0 : pct >= 0;
   const arrow = pct > 0 ? '↗' : pct < 0 ? '↘' : '→';
-  return `<span class="delta ${good ? 'up' : 'down'}">${arrow} ${Math.abs(pct)}% so với tháng trước</span>`;
+  return `<span class="delta ${good ? 'up' : 'down'}">${arrow} ${Math.abs(pct)}% ${label}</span>`;
 }
 
 function setHealthScore(score, label) {
@@ -190,15 +209,7 @@ async function loadDashboard() {
   $('#dash-alerts').innerHTML = alerts.join('');
 
   // ----- Charts -----
-  // Setup Chart.js global settings for the premium dark glass theme
-  if (typeof Chart !== 'undefined') {
-    Chart.defaults.color = '#718096'; // var(--text-muted)
-    Chart.defaults.font.family = "'Outfit', 'Be Vietnam Pro', sans-serif";
-    Chart.defaults.font.size = 11;
-  }
-
   const catLabels = Object.keys(d.expenseByCategory);
-  const NESTED_PALETTE = ['#2A7A8C', '#38B2AC', '#E6B5A1', '#F6AD55', '#4F6773', '#CBD5E0', '#FBD38D', '#81E6D9', '#E2E8F0'];
 
   makeChart('chart-category', {
     type: 'doughnut',
@@ -368,14 +379,8 @@ async function loadDashboard() {
 
   // ----- Ranked top lists -----
   const totalExp = d.kpi.monthExpense || 0;
-  const rankList = (arr) => arr.map((x, i) =>
-    `<div class="rank-row"><span class="rank-num">${i + 1}</span>
-      <span class="rank-name">${esc(x.name)}</span>
-      <span class="rank-amt">${fmtVND(x.amount)}</span>
-      <span class="rank-pct">${totalExp ? Math.round(x.amount / totalExp * 100) + '%' : ''}</span></div>`
-  ).join('') || '<p class="muted">Chưa có dữ liệu.</p>';
-  $('#top-cats').innerHTML = rankList(d.topCategories || []);
-  $('#top-vendors').innerHTML = rankList(d.topVendors || []);
+  $('#top-cats').innerHTML = rankListHTML(d.topCategories, totalExp);
+  $('#top-vendors').innerHTML = rankListHTML(d.topVendors, totalExp);
 
   // ----- Recent transactions -----
   $('#recent-list').innerHTML = (d.recentTransactions || []).map(txRowHTML).join('') || '<p class="muted">Chưa có giao dịch.</p>';
@@ -430,6 +435,130 @@ function txRowHTML(r) {
   </div>`;
 }
 
+/** Preset the manual-transaction-form type when opened from the Income/Expense quick-add buttons. */
+let presetTxType = null;
+
+// ============================================================
+// INCOME
+// ============================================================
+async function loadIncomePage() {
+  const month = $('#inc-month').value || new Date().toISOString().slice(0, 7);
+  $('#inc-month').value = month;
+  const d = await api('getDashboard', { month });
+
+  const trend = d.monthlyTrend || [];
+  const idx = trend.findIndex(x => x.month === month);
+  const cur = idx >= 0 ? trend[idx] : { income: d.kpi.monthIncome };
+  const prev = idx > 0 ? trend[idx - 1] : null;
+
+  $('#inc-kpi-total').textContent = fmtVND(d.kpi.monthIncome);
+  $('#inc-kpi-delta').innerHTML = prev ? deltaHTML(cur.income, prev.income) : '';
+
+  // Yearly income KPIs (total this year + avg/month this year vs last year)
+  const my = month.slice(0, 4);
+  const iy = d.incomeYear || {};
+  const curYear = iy.year || my;
+  const prevYear = iy.prevYear || String(Number(my) - 1);
+  $('#inc-lbl-year').textContent = `Tổng thu nhập năm ${curYear}`;
+  $('#inc-kpi-year').textContent = fmtVND(iy.yearIncome || 0);
+  $('#inc-kpi-year-delta').innerHTML = iy.prevYearSamePeriod
+    ? deltaHTML(iy.yearIncome, iy.prevYearSamePeriod, { label: `so với cùng kỳ năm ${prevYear}` })
+    : `<span class="delta flat">chưa có dữ liệu năm ${esc(prevYear)}</span>`;
+  $('#inc-lbl-avgcur').textContent = `Thu nhập BQ/tháng năm ${curYear}`;
+  $('#inc-kpi-avgmonth-cur').textContent = fmtVND(iy.avgMonthThisYear || 0);
+  $('#inc-lbl-avgprev').textContent = `Thu nhập BQ/tháng năm ${prevYear}`;
+  $('#inc-kpi-avgmonth-prev').textContent = iy.prevYearIncome > 0 ? fmtVND(iy.avgMonthPrevYear) : '—';
+
+  const sources = d.incomeBySource || {};
+  const srcLabels = Object.keys(sources);
+
+  const rows = await api('getTransactions', { month, limit: 500 }, { silent: true });
+  const incomeRows = rows.filter(r => r.transaction_type === 'Income' || r.transaction_type === 'Refund');
+
+  makeChart('chart-income-source', {
+    type: 'doughnut',
+    data: { labels: srcLabels, datasets: [{ data: srcLabels.map(k => sources[k]), backgroundColor: NESTED_PALETTE, borderWidth: 2, borderColor: '#FFFFFF' }] },
+    options: { cutout: '70%', plugins: { legend: { position: 'right', labels: { color: '#2D3748', font: { weight: 500 }, boxWidth: 10, padding: 12 } } } }
+  });
+
+  makeChart('chart-income-monthly', {
+    type: 'bar',
+    data: { labels: trend.map(x => x.month), datasets: [{ label: 'Thu nhập', data: trend.map(x => x.income), backgroundColor: 'rgba(56, 178, 172, 0.55)', borderColor: 'rgba(56,178,172,0.9)', borderWidth: 1, borderRadius: 6 }] },
+    options: { plugins: { legend: { display: false } } }
+  });
+
+  $('#inc-top-sources').innerHTML = rankListHTML(d.topIncomeSources, d.kpi.monthIncome);
+  $('#inc-recent').innerHTML = incomeRows.slice(0, 10).map(txRowHTML).join('') || '<p class="muted">Chưa có giao dịch thu nhập tháng này.</p>';
+}
+$('#inc-month').addEventListener('change', () => loadIncomePage().catch(e => toast(e.message)));
+$('#btn-inc-add').addEventListener('click', () => {
+  presetTxType = 'Income';
+  showPage('transactions');
+  $('#tx-form').hidden = false;
+  $('#mtx-date').value = new Date().toISOString().slice(0, 10);
+});
+
+// ============================================================
+// EXPENSE
+// ============================================================
+async function loadExpensePage() {
+  const month = $('#exp-month').value || new Date().toISOString().slice(0, 7);
+  $('#exp-month').value = month;
+  const d = await api('getDashboard', { month });
+
+  const trend = d.monthlyTrend || [];
+  const idx = trend.findIndex(x => x.month === month);
+  const cur = idx >= 0 ? trend[idx] : { expense: d.kpi.monthExpense };
+  const prev = idx > 0 ? trend[idx - 1] : null;
+
+  $('#exp-kpi-total').textContent = fmtVND(d.kpi.monthExpense);
+  $('#exp-kpi-delta').innerHTML = prev ? deltaHTML(cur.expense, prev.expense, { invert: true }) : '';
+
+  const [my, mm] = month.split('-');
+  const now = new Date();
+  const isCurrentMonth = month === now.toISOString().slice(0, 7);
+  const daysInMonth = new Date(Number(my), Number(mm), 0).getDate();
+  const daysElapsed = isCurrentMonth ? now.getDate() : daysInMonth;
+  const avgDay = d.kpi.monthExpense / Math.max(daysElapsed, 1);
+  $('#exp-kpi-avgday').textContent = fmtVND(Math.round(avgDay));
+  $('#exp-kpi-forecast').textContent = fmtVND(Math.round(avgDay * daysInMonth));
+
+  const catLabels = Object.keys(d.expenseByCategory);
+  $('#exp-kpi-groups').textContent = catLabels.length;
+
+  makeChart('chart-expense-category', {
+    type: 'doughnut',
+    data: { labels: catLabels, datasets: [{ data: catLabels.map(k => d.expenseByCategory[k]), backgroundColor: NESTED_PALETTE, borderWidth: 2, borderColor: '#FFFFFF' }] },
+    options: { cutout: '70%', plugins: { legend: { position: 'right', labels: { color: '#2D3748', font: { weight: 500 }, boxWidth: 10, padding: 12 } } } }
+  });
+
+  const days = Object.keys(d.dailyTrend).sort();
+  makeChart('chart-expense-daily', {
+    type: 'line',
+    data: { labels: days.map(x => x.slice(8)), datasets: [{ label: 'Chi tiêu', data: days.map(k => d.dailyTrend[k]), borderColor: '#E6B5A1', borderWidth: 3, backgroundColor: 'rgba(230, 181, 161, 0.2)', fill: true, tension: .38, pointRadius: 2, pointHoverRadius: 5, pointBackgroundColor: '#E6B5A1', pointBorderColor: '#FFFFFF' }] },
+    options: { plugins: { legend: { display: false } } }
+  });
+
+  makeChart('chart-expense-monthly', {
+    type: 'bar',
+    data: { labels: trend.map(x => x.month), datasets: [{ label: 'Chi tiêu', data: trend.map(x => x.expense), backgroundColor: 'rgba(230, 181, 161, 0.55)', borderColor: 'rgba(230,181,161,0.9)', borderWidth: 1, borderRadius: 6 }] },
+    options: { plugins: { legend: { display: false } } }
+  });
+
+  $('#exp-top-cats').innerHTML = rankListHTML(d.topCategories, d.kpi.monthExpense);
+  $('#exp-top-vendors').innerHTML = rankListHTML(d.topVendors, d.kpi.monthExpense);
+
+  const rows = await api('getTransactions', { month, type: 'Expense', limit: 10 }, { silent: true });
+  $('#exp-recent').innerHTML = rows.map(txRowHTML).join('') || '<p class="muted">Chưa có giao dịch chi tiêu tháng này.</p>';
+}
+$('#exp-month').addEventListener('change', () => loadExpensePage().catch(e => toast(e.message)));
+$('#btn-exp-add').addEventListener('click', () => {
+  presetTxType = 'Expense';
+  showPage('transactions');
+  $('#tx-form').hidden = false;
+  $('#mtx-date').value = new Date().toISOString().slice(0, 10);
+});
+
 // ============================================================
 // TRANSACTIONS
 // ============================================================
@@ -437,8 +566,9 @@ async function loadTransactions() {
   await ensureCategories();
   fillSelect($('#tx-type'), CATS.types, { empty: '— Loại —', value: $('#tx-type').value });
   fillSelect($('#tx-group'), CATS.groups, { empty: '— Nhóm —', value: $('#tx-group').value });
-  fillSelect($('#mtx-type'), CATS.types, { value: 'Expense' });
+  fillSelect($('#mtx-type'), CATS.types, { value: presetTxType || 'Expense' });
   fillSelect($('#mtx-group'), CATS.groups);
+  presetTxType = null;
 
   const rows = await api('getTransactions', {
     month: $('#tx-month').value || undefined,
@@ -709,6 +839,179 @@ $('#btn-save-budget').addEventListener('click', async () => {
 });
 
 // ============================================================
+// DEBTS
+// ============================================================
+const DEBT_TYPE_LABELS = {
+  home_loan: 'Vay mua nhà', car_loan: 'Vay mua xe', personal_loan: 'Vay tiêu dùng',
+  credit_card: 'Thẻ tín dụng', student_loan: 'Vay du học / học phí', other: 'Khác'
+};
+let currentDebtId = null;   // debt being edited in #debt-form (null = creating new)
+let paymentDebtId = null;   // debt being paid in #debt-payment-form
+
+async function loadDebtsPage() {
+  const d = await api('getDebtDashboard');
+
+  $('#debt-kpi-outstanding').textContent = fmtVND(d.kpi.totalOutstanding);
+  $('#debt-kpi-monthly').textContent = fmtVND(d.kpi.totalMonthlyPayment);
+  $('#debt-kpi-paid').textContent = fmtVND(d.kpi.totalPaid);
+  $('#debt-kpi-active').textContent = d.kpi.activeCount;
+  $('#debt-kpi-paidoff').textContent = d.kpi.paidOffCount;
+
+  const typeKeys = Object.keys(d.byType);
+  makeChart('chart-debt-type', {
+    type: 'doughnut',
+    data: {
+      labels: typeKeys.map(t => DEBT_TYPE_LABELS[t] || t),
+      datasets: [{ data: typeKeys.map(k => d.byType[k]), backgroundColor: NESTED_PALETTE, borderWidth: 2, borderColor: '#FFFFFF' }]
+    },
+    options: { cutout: '70%', plugins: { legend: { position: 'right', labels: { color: '#2D3748', font: { weight: 500 }, boxWidth: 10, padding: 12 } } } }
+  });
+
+  $('#debt-upcoming').innerHTML = d.upcoming.length ? d.upcoming.map(deb => `
+    <div class="tx-row">
+      <span class="tx-date">Ngày ${esc(deb.due_day)}</span>
+      <span class="tx-main">${esc(deb.name)}<small>${esc(DEBT_TYPE_LABELS[deb.type] || deb.type)}</small></span>
+      <span class="tx-amt expense">${fmtVND(deb.monthly_payment)}</span>
+    </div>`).join('') : '<p class="muted">Không có khoản nợ nào có ngày đến hạn hàng tháng.</p>';
+
+  $('#debt-list').innerHTML = d.debts.length
+    ? d.debts.map(debtCardHTML).join('')
+    : '<p class="muted">Chưa có khoản nợ nào. Bấm "+ Thêm khoản nợ" để bắt đầu.</p>';
+  $$('#debt-list .btn-debt-pay').forEach(b => b.addEventListener('click', () => openPaymentForm(b.dataset.id, b.dataset.name)));
+  $$('#debt-list .btn-debt-edit').forEach(b => b.addEventListener('click', () => openDebtForm(b.dataset.id, d.debts)));
+  $$('#debt-list .btn-debt-status').forEach(b => b.addEventListener('click', () => toggleDebtStatus(b.dataset.id, b.dataset.status)));
+  $$('#debt-list .btn-debt-delete').forEach(b => b.addEventListener('click', () => deleteDebtRow(b.dataset.id)));
+
+  $('#debt-payments-table').innerHTML = d.recentPayments.length ? `<div class="table-wrap"><table>
+    <thead><tr><th>Ngày</th><th>Khoản nợ</th><th>Số tiền</th><th>Gốc</th><th>Lãi</th><th>Ghi chú</th></tr></thead>
+    <tbody>${d.recentPayments.map(p => `<tr>
+      <td class="money">${esc(p.payment_date)}</td><td>${esc(p.debt_name)}</td>
+      <td class="money">${fmtVND(p.amount)}</td><td class="money">${fmtVND(p.principal_portion)}</td>
+      <td class="money">${fmtVND(p.interest_portion)}</td><td>${esc(p.notes)}</td>
+    </tr>`).join('')}</tbody></table></div>` : '<p class="muted">Chưa có khoản thanh toán nào.</p>';
+}
+
+function debtCardHTML(deb) {
+  const paidOff = deb.status === 'paid_off';
+  return `<div class="debt-card ${paidOff ? 'paid-off' : ''}">
+    <div class="debt-card-head">
+      <div>
+        <span class="debt-type-badge">${esc(DEBT_TYPE_LABELS[deb.type] || deb.type)}</span>
+        <h3>${esc(deb.name)}</h3>
+        <span class="muted">${deb.lender ? esc(deb.lender) + ' · ' : ''}bắt đầu ${esc(String(deb.start_date).slice(0, 10))}</span>
+      </div>
+      <div class="debt-card-amounts">
+        <strong class="money ${paidOff ? 'income' : 'expense'}">${paidOff ? 'Đã tất toán' : fmtVND(deb.current_balance)}</strong>
+        <span class="muted">/ gốc ${fmtVND(deb.principal)}</span>
+      </div>
+    </div>
+    <div class="debt-bar"><i style="width:${deb.pct_paid}%"></i></div>
+    <div class="debt-card-meta">
+      <span>Trả hàng tháng: <b>${fmtVND(deb.monthly_payment)}</b></span>
+      <span>Lãi suất: <b>${deb.interest_rate}%/năm</b></span>
+      ${deb.due_day ? `<span>Đến hạn: <b>ngày ${esc(deb.due_day)}</b></span>` : ''}
+      ${!paidOff && deb.months_remaining != null ? `<span>Còn ~<b>${deb.months_remaining} tháng</b></span>` : ''}
+      <span>Đã trả: <b>${deb.pct_paid}%</b></span>
+    </div>
+    ${deb.notes ? `<p class="muted debt-notes">${esc(deb.notes)}</p>` : ''}
+    <div class="btn-row">
+      ${!paidOff ? `<button class="btn small primary btn-debt-pay" data-id="${esc(deb.debt_id)}" data-name="${esc(deb.name)}">Ghi nhận thanh toán</button>` : ''}
+      <button class="btn small btn-debt-edit" data-id="${esc(deb.debt_id)}">Sửa</button>
+      ${!paidOff
+        ? `<button class="btn small btn-debt-status" data-id="${esc(deb.debt_id)}" data-status="paid_off">Đánh dấu đã tất toán</button>`
+        : `<button class="btn small btn-debt-status" data-id="${esc(deb.debt_id)}" data-status="active">Mở lại</button>`}
+      <button class="btn small danger btn-debt-delete" data-id="${esc(deb.debt_id)}">Xóa</button>
+    </div>
+  </div>`;
+}
+
+function openDebtForm(debtId, debts) {
+  $('#debt-payment-form').hidden = true;
+  $('#debt-form').hidden = false;
+  currentDebtId = debtId || null;
+  const deb = debtId ? (debts || []).find(x => x.debt_id === debtId) : null;
+  $('#debt-form-title').textContent = deb ? 'Sửa khoản nợ' : 'Thêm khoản nợ';
+  $('#dbt-name').value = deb ? deb.name : '';
+  $('#dbt-type').value = deb ? deb.type : 'home_loan';
+  $('#dbt-lender').value = deb ? (deb.lender || '') : '';
+  $('#dbt-principal').value = deb ? deb.principal : '';
+  $('#dbt-rate').value = deb ? deb.interest_rate : '';
+  $('#dbt-term').value = deb && deb.term_months != null ? deb.term_months : '';
+  $('#dbt-start').value = deb ? String(deb.start_date).slice(0, 10) : new Date().toISOString().slice(0, 10);
+  $('#dbt-payment').value = deb ? deb.monthly_payment : '';
+  $('#dbt-due').value = deb && deb.due_day != null ? deb.due_day : '';
+  // On edit, prefill so the balance can be adjusted manually (e.g. bank rate reset
+  // after the fixed-rate period). Routine changes still go through "Ghi nhận thanh toán".
+  $('#dbt-balance').value = deb ? deb.current_balance : '';
+  $('#dbt-balance-wrap').hidden = false;
+  $('#dbt-notes').value = deb ? (deb.notes || '') : '';
+}
+$('#btn-debt-add').addEventListener('click', () => openDebtForm(null, []));
+$('#btn-cancel-debt').addEventListener('click', () => $('#debt-form').hidden = true);
+$('#btn-save-debt').addEventListener('click', async () => {
+  try {
+    await api('saveDebt', {
+      debt_id: currentDebtId || undefined,
+      name: $('#dbt-name').value.trim(),
+      type: $('#dbt-type').value,
+      lender: $('#dbt-lender').value.trim(),
+      principal: $('#dbt-principal').value,
+      interest_rate: $('#dbt-rate').value,
+      term_months: $('#dbt-term').value,
+      start_date: $('#dbt-start').value,
+      monthly_payment: $('#dbt-payment').value,
+      due_day: $('#dbt-due').value,
+      current_balance: $('#dbt-balance').value,
+      notes: $('#dbt-notes').value.trim()
+    });
+    toast('Đã lưu khoản nợ.');
+    $('#debt-form').hidden = true;
+    loadDebtsPage();
+  } catch (e) { toast('Lỗi: ' + e.message); }
+});
+
+function openPaymentForm(debtId, name) {
+  $('#debt-form').hidden = true;
+  $('#debt-payment-form').hidden = false;
+  paymentDebtId = debtId;
+  $('#dpy-debt-name').textContent = name;
+  $('#dpy-date').value = new Date().toISOString().slice(0, 10);
+  $('#dpy-amount').value = '';
+  $('#dpy-notes').value = '';
+}
+$('#btn-cancel-payment').addEventListener('click', () => $('#debt-payment-form').hidden = true);
+$('#btn-save-payment').addEventListener('click', async () => {
+  try {
+    await api('addDebtPayment', {
+      debt_id: paymentDebtId,
+      payment_date: $('#dpy-date').value,
+      amount: $('#dpy-amount').value,
+      payment_method: $('#dpy-payment').value,
+      notes: $('#dpy-notes').value.trim()
+    });
+    toast('Đã ghi nhận thanh toán.');
+    $('#debt-payment-form').hidden = true;
+    loadDebtsPage();
+  } catch (e) { toast('Lỗi: ' + e.message); }
+});
+
+async function toggleDebtStatus(debtId, status) {
+  try {
+    await api('setDebtStatus', { debt_id: debtId, status });
+    toast(status === 'paid_off' ? 'Đã đánh dấu tất toán.' : 'Đã mở lại khoản nợ.');
+    loadDebtsPage();
+  } catch (e) { toast('Lỗi: ' + e.message); }
+}
+async function deleteDebtRow(debtId) {
+  if (!confirm('Xóa khoản nợ này? (Chỉ xóa được khi chưa có lịch sử thanh toán.)')) return;
+  try {
+    await api('deleteDebt', { debt_id: debtId });
+    toast('Đã xóa khoản nợ.');
+    loadDebtsPage();
+  } catch (e) { toast('Lỗi: ' + e.message); }
+}
+
+// ============================================================
 // CATEGORIES / RULES / SETTINGS / LOGS
 // ============================================================
 async function loadCategoriesPage() {
@@ -790,14 +1093,6 @@ $('#btn-refresh-logs').addEventListener('click', () => loadLogs().catch(e => toa
 
 // ---------------- Boot ----------------
 window.showPage = showPage;
-
-// Nav show/hide toggle (persisted per device)
-const NAV_KEY = 'expense_ocr_nav_hidden';
-if (localStorage.getItem(NAV_KEY) === '1') document.body.classList.add('nav-hidden');
-$('#nav-toggle').addEventListener('click', () => {
-  const hidden = document.body.classList.toggle('nav-hidden');
-  localStorage.setItem(NAV_KEY, hidden ? '1' : '0');
-});
 
 (function boot() {
   if (!cfg.url || !cfg.token) showPage('settings');

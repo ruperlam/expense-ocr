@@ -568,11 +568,44 @@ td input[type=number] { font-family: var(--mono); }
 .budget-row .meta b { font-family: var(--mono); font-weight: 600; }
 
 .chip-list { display: flex; flex-wrap: wrap; gap: 8px; }
-.chip { 
-  background: rgba(255, 255, 255, 0.05); color: var(--text-main); 
+.chip {
+  background: rgba(255, 255, 255, 0.05); color: var(--text-main);
   border-radius: 999px; padding: 6px 14px; font-size: 13px;
   border: 1px solid var(--border-soft);
 }
+
+/* ============================================================
+   DEBT CARDS
+   ============================================================ */
+#debt-list { display: flex; flex-direction: column; gap: 14px; }
+.debt-card {
+  border: 1px solid var(--border-soft); border-radius: var(--radius-md);
+  padding: 16px 18px; background: rgba(255, 255, 255, 0.015);
+}
+.debt-card.paid-off { opacity: 0.55; }
+.debt-card-head { display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; margin-bottom: 10px; }
+.debt-card-head h3 { margin: 4px 0 2px; font-size: 16px; font-weight: 700; color: var(--text-main); }
+.debt-card-amounts { text-align: right; }
+.debt-card-amounts strong { display: block; font-family: var(--mono); font-size: 17px; }
+.debt-type-badge {
+  display: inline-block; font-size: 11px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.04em; padding: 3px 10px; border-radius: 999px;
+  background: var(--color-blue-soft); color: var(--accent); border: 1px solid rgba(42,122,140,0.2);
+}
+.debt-bar {
+  height: 8px; border-radius: 999px; background: rgba(255, 255, 255, 0.05);
+  overflow: hidden; margin: 10px 0; position: relative;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.5); border: 1px solid rgba(255, 255, 255, 0.03);
+}
+.debt-bar i {
+  display: block; height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent-deep) 0%, var(--accent) 100%);
+  box-shadow: 0 0 8px var(--accent-glow); transition: width 0.6s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.debt-card.paid-off .debt-bar i { background: linear-gradient(90deg, var(--up) 0%, #6EDCC4 100%); }
+.debt-card-meta { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12.5px; color: var(--text-muted); margin-bottom: 4px; }
+.debt-card-meta b { color: var(--text-main); font-family: var(--mono); }
+.debt-notes { font-size: 12px; margin: 2px 0 6px; }
 
 /* ============================================================
    ALERTS, TOASTS & DRAFTS

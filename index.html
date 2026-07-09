@@ -20,8 +20,9 @@
   </div>
   <div class="top-nav-center">
     <button class="top-nav-link active" data-page="dashboard">DASHBOARD</button>
-    <button class="top-nav-link">INCOME</button>
-    <button class="top-nav-link">EXPENSE</button>
+    <button class="top-nav-link" data-page="income">INCOME</button>
+    <button class="top-nav-link" data-page="expense">EXPENSE</button>
+    <button class="top-nav-link" data-page="debts">DEBTS</button>
   </div>
   <div class="top-nav-right">
     <div class="avatars" style="display:none"></div>
@@ -274,6 +275,159 @@
     </div>
   </section>
 
+  <!-- ============ INCOME ============ -->
+  <section id="page-income" class="page">
+    <header class="page-head">
+      <div>
+        <h1>Thu nhập</h1>
+        <p class="page-sub">Nguồn thu &amp; xu hướng thu nhập</p>
+      </div>
+      <div class="dash-actions">
+        <input type="month" id="inc-month" class="input">
+        <button class="btn primary" id="btn-inc-add">+ Thêm thu nhập</button>
+      </div>
+    </header>
+
+    <div class="bento-grid">
+      <div class="kpi-card bento-item bento-item-sm-6 bento-item-md-3">
+        <span class="kpi-ico ico-mint">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+        </span>
+        <div class="kpi-meta">
+          <label>Thu nhập tháng</label>
+          <strong id="inc-kpi-total" class="money income">0 ₫</strong>
+          <span class="delta" id="inc-kpi-delta"></span>
+        </div>
+      </div>
+      <div class="kpi-card bento-item bento-item-sm-6 bento-item-md-3">
+        <span class="kpi-ico ico-blue">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M12 6v6l4 2"></path></svg>
+        </span>
+        <div class="kpi-meta">
+          <label id="inc-lbl-year">Tổng thu nhập năm nay</label>
+          <strong id="inc-kpi-year" class="money income">0 ₫</strong>
+          <span class="delta" id="inc-kpi-year-delta"></span>
+        </div>
+      </div>
+      <div class="kpi-card bento-item bento-item-sm-6 bento-item-md-3">
+        <span class="kpi-ico ico-cream">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>
+        </span>
+        <div class="kpi-meta">
+          <label id="inc-lbl-avgcur">Thu nhập BQ/tháng năm nay</label>
+          <strong id="inc-kpi-avgmonth-cur" class="money">0 ₫</strong>
+        </div>
+      </div>
+      <div class="kpi-card bento-item bento-item-sm-6 bento-item-md-3">
+        <span class="kpi-ico ico-sage">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>
+        </span>
+        <div class="kpi-meta">
+          <label id="inc-lbl-avgprev">Thu nhập BQ/tháng năm trước</label>
+          <strong id="inc-kpi-avgmonth-prev" class="money">—</strong>
+        </div>
+      </div>
+
+      <div class="card bento-item bento-item-md-6 bento-item-lg-4">
+        <h2>Thu nhập theo nguồn</h2>
+        <canvas id="chart-income-source"></canvas>
+      </div>
+      <div class="card bento-item bento-item-md-6 bento-item-lg-8">
+        <h2>Xu hướng thu nhập theo tháng (12 tháng)</h2>
+        <canvas id="chart-income-monthly"></canvas>
+      </div>
+
+      <div class="card bento-item bento-item-md-6 bento-item-lg-5">
+        <h2>Top nguồn thu</h2>
+        <div id="inc-top-sources"></div>
+      </div>
+      <div class="card bento-item bento-item-md-6 bento-item-lg-7">
+        <h2>Giao dịch thu nhập gần đây</h2>
+        <div id="inc-recent" class="tx-list"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ EXPENSE ============ -->
+  <section id="page-expense" class="page">
+    <header class="page-head">
+      <div>
+        <h1>Chi tiêu</h1>
+        <p class="page-sub">Danh mục &amp; xu hướng chi tiêu</p>
+      </div>
+      <div class="dash-actions">
+        <input type="month" id="exp-month" class="input">
+        <button class="btn primary" id="btn-exp-add">+ Thêm chi tiêu</button>
+      </div>
+    </header>
+
+    <div class="bento-grid">
+      <div class="kpi-card bento-item bento-item-sm-6 bento-item-md-3">
+        <span class="kpi-ico ico-peach">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2" ry="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
+        </span>
+        <div class="kpi-meta">
+          <label>Chi tiêu tháng</label>
+          <strong id="exp-kpi-total" class="money expense">0 ₫</strong>
+          <span class="delta" id="exp-kpi-delta"></span>
+        </div>
+      </div>
+      <div class="kpi-card bento-item bento-item-sm-6 bento-item-md-3">
+        <span class="kpi-ico ico-blue">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+        </span>
+        <div class="kpi-meta">
+          <label>Chi tiêu TB/ngày</label>
+          <strong id="exp-kpi-avgday" class="money">0 ₫</strong>
+        </div>
+      </div>
+      <div class="kpi-card bento-item bento-item-sm-6 bento-item-md-3">
+        <span class="kpi-ico ico-cream">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"></path><path d="m18.7 8-5.1 5.2-2.8-2.7L7 14.3"></path></svg>
+        </span>
+        <div class="kpi-meta">
+          <label>Dự báo cuối tháng</label>
+          <strong id="exp-kpi-forecast" class="money">0 ₫</strong>
+        </div>
+      </div>
+      <div class="kpi-card bento-item bento-item-sm-6 bento-item-md-3">
+        <span class="kpi-ico ico-sage">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>
+        </span>
+        <div class="kpi-meta">
+          <label>Số danh mục</label>
+          <strong id="exp-kpi-groups" class="money">0</strong>
+        </div>
+      </div>
+
+      <div class="card bento-item bento-item-md-6 bento-item-lg-4">
+        <h2>Chi tiêu theo nhóm</h2>
+        <canvas id="chart-expense-category"></canvas>
+      </div>
+      <div class="card bento-item bento-item-md-6 bento-item-lg-8">
+        <h2>Xu hướng chi theo ngày</h2>
+        <canvas id="chart-expense-daily"></canvas>
+      </div>
+      <div class="card bento-item bento-item-lg-12">
+        <h2>Xu hướng chi theo tháng (12 tháng)</h2>
+        <canvas id="chart-expense-monthly"></canvas>
+      </div>
+
+      <div class="card bento-item bento-item-md-6 bento-item-lg-4">
+        <h2>Top nhóm chi tiêu</h2>
+        <div id="exp-top-cats"></div>
+      </div>
+      <div class="card bento-item bento-item-md-6 bento-item-lg-4">
+        <h2>Top nhà cung cấp</h2>
+        <div id="exp-top-vendors"></div>
+      </div>
+      <div class="card bento-item bento-item-md-12 bento-item-lg-4">
+        <h2>Giao dịch chi tiêu gần đây</h2>
+        <div id="exp-recent" class="tx-list"></div>
+      </div>
+    </div>
+  </section>
+
 
   <!-- ============ TRANSACTIONS ============ -->
   <section id="page-transactions" class="page">
@@ -426,6 +580,125 @@
       <div class="btn-row"><button class="btn primary" id="btn-save-budget">Lưu ngân sách</button></div>
     </div>
     <div class="card"><h2>Danh sách ngân sách</h2><div id="budget-table"></div></div>
+  </section>
+
+  <!-- ============ DEBTS ============ -->
+  <section id="page-debts" class="page">
+    <header class="page-head">
+      <div>
+        <h1>Nợ &amp; Khoản vay</h1>
+        <p class="page-sub">Vay mua nhà, mua xe và các khoản nợ khác</p>
+      </div>
+      <button class="btn primary" id="btn-debt-add">+ Thêm khoản nợ</button>
+    </header>
+
+    <div class="bento-grid">
+      <div class="kpi-card bento-item bento-item-sm-6 bento-item-md-3">
+        <span class="kpi-ico ico-peach">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2" ry="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
+        </span>
+        <div class="kpi-meta">
+          <label>Tổng dư nợ</label>
+          <strong id="debt-kpi-outstanding" class="money expense">0 ₫</strong>
+        </div>
+      </div>
+      <div class="kpi-card bento-item bento-item-sm-6 bento-item-md-3">
+        <span class="kpi-ico ico-cream">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>
+        </span>
+        <div class="kpi-meta">
+          <label>Trả hàng tháng</label>
+          <strong id="debt-kpi-monthly" class="money">0 ₫</strong>
+        </div>
+      </div>
+      <div class="kpi-card bento-item bento-item-sm-6 bento-item-md-3">
+        <span class="kpi-ico ico-mint">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"></path><line x1="7" y1="7" x2="7.01" y2="7"></line></svg>
+        </span>
+        <div class="kpi-meta">
+          <label>Đã trả (gốc)</label>
+          <strong id="debt-kpi-paid" class="money income">0 ₫</strong>
+        </div>
+      </div>
+      <div class="kpi-card bento-item bento-item-sm-6 bento-item-md-3">
+        <span class="kpi-ico ico-blue">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>
+        </span>
+        <div class="kpi-meta">
+          <label>Đang hoạt động / Đã tất toán</label>
+          <strong><span id="debt-kpi-active">0</span> / <span id="debt-kpi-paidoff">0</span></strong>
+        </div>
+      </div>
+
+      <div class="card bento-item bento-item-md-5 bento-item-lg-4">
+        <h2>Dư nợ theo loại</h2>
+        <canvas id="chart-debt-type"></canvas>
+      </div>
+      <div class="card bento-item bento-item-md-7 bento-item-lg-8">
+        <h2>Sắp đến hạn tháng này</h2>
+        <div id="debt-upcoming" class="tx-list"></div>
+      </div>
+
+      <div class="card bento-item bento-item-lg-12">
+        <h2>Danh sách khoản nợ</h2>
+        <div id="debt-list"></div>
+      </div>
+
+      <div class="card bento-item bento-item-lg-12">
+        <h2>Lịch sử thanh toán gần đây</h2>
+        <div id="debt-payments-table"></div>
+      </div>
+    </div>
+
+    <!-- Add / Edit debt form -->
+    <div id="debt-form" class="card form-card" hidden>
+      <h2 id="debt-form-title">Thêm khoản nợ</h2>
+      <div class="form-grid">
+        <label>Tên khoản nợ <input type="text" id="dbt-name" class="input" placeholder="VD: Vay mua nhà Vietcombank"></label>
+        <label>Loại nợ <select id="dbt-type" class="input">
+          <option value="home_loan">Vay mua nhà</option>
+          <option value="car_loan">Vay mua xe</option>
+          <option value="personal_loan">Vay tiêu dùng</option>
+          <option value="credit_card">Thẻ tín dụng</option>
+          <option value="student_loan">Vay du học / học phí</option>
+          <option value="other">Khác</option>
+        </select></label>
+        <label>Bên cho vay <input type="text" id="dbt-lender" class="input" placeholder="VD: Vietcombank"></label>
+        <label>Số tiền vay gốc (VND) <input type="number" id="dbt-principal" class="input"></label>
+        <label>Lãi suất (%/năm) <input type="number" step="0.01" id="dbt-rate" class="input" placeholder="8.5"></label>
+        <label>Kỳ hạn (tháng) <input type="number" id="dbt-term" class="input" placeholder="240"></label>
+        <label>Ngày bắt đầu <input type="date" id="dbt-start" class="input"></label>
+        <label>Trả hàng tháng (VND) <input type="number" id="dbt-payment" class="input"></label>
+        <label>Ngày đến hạn hàng tháng <input type="number" id="dbt-due" class="input" min="1" max="31" placeholder="1-31"></label>
+        <label id="dbt-balance-wrap">Dư nợ hiện tại (VND) <input type="number" id="dbt-balance" class="input" placeholder="Để trống = bằng số tiền vay gốc"></label>
+        <label class="span2">Ghi chú <input type="text" id="dbt-notes" class="input"></label>
+      </div>
+      <div class="btn-row">
+        <button class="btn primary" id="btn-save-debt">Lưu khoản nợ</button>
+        <button class="btn" id="btn-cancel-debt">Hủy</button>
+      </div>
+    </div>
+
+    <!-- Log a payment against a debt -->
+    <div id="debt-payment-form" class="card form-card" hidden>
+      <h2>Ghi nhận thanh toán — <span id="dpy-debt-name"></span></h2>
+      <div class="form-grid">
+        <label>Ngày thanh toán <input type="date" id="dpy-date" class="input"></label>
+        <label>Số tiền (VND) <input type="number" id="dpy-amount" class="input"></label>
+        <label>Phương thức
+          <select id="dpy-payment" class="input">
+            <option value="bank_transfer">Chuyển khoản</option><option value="cash">Tiền mặt</option>
+            <option value="card">Thẻ</option><option value="e-wallet">Ví điện tử</option>
+          </select>
+        </label>
+        <label class="span2">Ghi chú <input type="text" id="dpy-notes" class="input"></label>
+      </div>
+      <p class="muted">Khoản thanh toán này sẽ tự động được ghi vào Chi tiêu (nhóm "Debt Payment").</p>
+      <div class="btn-row">
+        <button class="btn primary" id="btn-save-payment">Lưu thanh toán</button>
+        <button class="btn" id="btn-cancel-payment">Hủy</button>
+      </div>
+    </div>
   </section>
 
   <!-- ============ CATEGORIES ============ -->
