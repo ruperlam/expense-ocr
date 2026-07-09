@@ -7,8 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=2">
-<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js?v=2"></script>
+<link rel="stylesheet" href="styles.css?v=4">
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 </head>
 <body>
 
@@ -646,6 +646,7 @@
 
       <div class="card bento-item bento-item-lg-12">
         <h2>Lịch sử thanh toán gần đây</h2>
+        <div id="debt-pay-filter" class="btn-row pay-filter"></div>
         <div id="debt-payments-table"></div>
       </div>
     </div>
@@ -698,6 +699,17 @@
         <button class="btn primary" id="btn-save-payment">Lưu thanh toán</button>
         <button class="btn" id="btn-cancel-payment">Hủy</button>
       </div>
+    </div>
+
+    <!-- Computed amortization schedule viewer -->
+    <div id="debt-schedule" class="card" hidden>
+      <header class="page-head">
+        <h2>Lịch trả nợ — <span id="dsc-debt-name"></span></h2>
+        <button class="btn" id="btn-close-schedule">✕ Đóng</button>
+      </header>
+      <p class="muted" id="dsc-summary"></p>
+      <p class="muted">Lịch được tính tự động theo dư nợ &amp; lãi suất hiện tại (gốc chia đều, lãi theo số ngày thực/365 — đúng công thức ngân hàng). Có thể lệch nhẹ khi ngày đến hạn rơi vào ngày nghỉ/lễ hoặc khi ngân hàng đổi lãi suất thả nổi.</p>
+      <div id="dsc-table" class="table-wrap schedule-wrap"></div>
     </div>
   </section>
 
@@ -767,6 +779,6 @@
 <div id="toast" hidden></div>
 <div id="loader" hidden><div class="spinner"></div><p id="loader-text">Đang xử lý…</p></div>
 
-<script src="app.js?v=2"></script>
+<script src="app.js?v=4"></script>
 </body>
 </html>

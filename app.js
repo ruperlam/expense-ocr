@@ -847,9 +847,26 @@ const DEBT_TYPE_LABELS = {
 };
 let currentDebtId = null;   // debt being edited in #debt-form (null = creating new)
 let paymentDebtId = null;   // debt being paid in #debt-payment-form
+let lastDebts = [];         // cache of debts from the last getDebtDashboard call
+
+/** Next installment estimate, same formula as the bank / backend schedule:
+ *  fixed principal slice + day-count interest on the current balance. */
+function estimateNextEMI(deb) {
+  const slice = deb.term_months > 0 && deb.principal > 0
+    ? Math.round(deb.principal / deb.term_months) : 0;
+  if (!slice || !deb.due_day) return deb.monthly_payment || null;
+  const today = new Date();
+  let due = new Date(today.getFullYear(), today.getMonth(), deb.due_day);
+  if (due <= today) due = new Date(today.getFullYear(), today.getMonth() + 1, deb.due_day);
+  const prev = new Date(due.getFullYear(), due.getMonth() - 1, deb.due_day);
+  const days = Math.round((due - prev) / 86400000);
+  const interest = Math.round(deb.current_balance * (deb.interest_rate / 100) * days / 365);
+  return Math.min(slice, Math.round(deb.current_balance)) + interest;
+}
 
 async function loadDebtsPage() {
   const d = await api('getDebtDashboard');
+  lastDebts = d.debts;
 
   $('#debt-kpi-outstanding').textContent = fmtVND(d.kpi.totalOutstanding);
   $('#debt-kpi-monthly').textContent = fmtVND(d.kpi.totalMonthlyPayment);
@@ -878,17 +895,46 @@ async function loadDebtsPage() {
     ? d.debts.map(debtCardHTML).join('')
     : '<p class="muted">Chưa có khoản nợ nào. Bấm "+ Thêm khoản nợ" để bắt đầu.</p>';
   $$('#debt-list .btn-debt-pay').forEach(b => b.addEventListener('click', () => openPaymentForm(b.dataset.id, b.dataset.name)));
+  $$('#debt-list .btn-debt-schedule').forEach(b => b.addEventListener('click', () => openScheduleView(b.dataset.id)));
   $$('#debt-list .btn-debt-edit').forEach(b => b.addEventListener('click', () => openDebtForm(b.dataset.id, d.debts)));
   $$('#debt-list .btn-debt-status').forEach(b => b.addEventListener('click', () => toggleDebtStatus(b.dataset.id, b.dataset.status)));
   $$('#debt-list .btn-debt-delete').forEach(b => b.addEventListener('click', () => deleteDebtRow(b.dataset.id)));
 
-  $('#debt-payments-table').innerHTML = d.recentPayments.length ? `<div class="table-wrap"><table>
+  payFilterId = null;
+  lastRecentPayments = d.recentPayments;
+  renderDebtPayments(d.recentPayments);
+  renderPayFilter(d.debts);
+}
+
+let payFilterId = null;        // debt_id filtering the payments table (null = all)
+let lastRecentPayments = [];   // unfiltered list from the last getDebtDashboard call
+
+function renderDebtPayments(rows) {
+  $('#debt-payments-table').innerHTML = rows.length ? `<div class="table-wrap"><table>
     <thead><tr><th>Ngày</th><th>Khoản nợ</th><th>Số tiền</th><th>Gốc</th><th>Lãi</th><th>Ghi chú</th></tr></thead>
-    <tbody>${d.recentPayments.map(p => `<tr>
+    <tbody>${rows.map(p => `<tr>
       <td class="money">${esc(p.payment_date)}</td><td>${esc(p.debt_name)}</td>
       <td class="money">${fmtVND(p.amount)}</td><td class="money">${fmtVND(p.principal_portion)}</td>
       <td class="money">${fmtVND(p.interest_portion)}</td><td>${esc(p.notes)}</td>
     </tr>`).join('')}</tbody></table></div>` : '<p class="muted">Chưa có khoản thanh toán nào.</p>';
+}
+
+function renderPayFilter(debts) {
+  const opts = [{ id: '', label: 'Tất cả' }]
+    .concat(debts.map(x => ({ id: x.debt_id, label: x.name })));
+  $('#debt-pay-filter').innerHTML = opts.map(o =>
+    `<button class="btn small ${(payFilterId || '') === o.id ? 'primary' : ''}" data-fid="${esc(o.id)}">${esc(o.label)}</button>`
+  ).join('');
+  $$('#debt-pay-filter button').forEach(b => b.addEventListener('click', async () => {
+    payFilterId = b.dataset.fid || null;
+    renderPayFilter(debts); // refresh active state
+    try {
+      if (!payFilterId) return renderDebtPayments(lastRecentPayments);
+      const rows = await api('getDebtPayments', { debtId: payFilterId }, { silent: true });
+      const nameOf = id => (lastDebts.find(x => x.debt_id === id) || {}).name || id;
+      renderDebtPayments(rows.slice(0, 24).map(p => Object.assign({ debt_name: nameOf(p.debt_id) }, p)));
+    } catch (e) { toast('Lỗi: ' + e.message); }
+  }));
 }
 
 function debtCardHTML(deb) {
@@ -916,6 +962,7 @@ function debtCardHTML(deb) {
     ${deb.notes ? `<p class="muted debt-notes">${esc(deb.notes)}</p>` : ''}
     <div class="btn-row">
       ${!paidOff ? `<button class="btn small primary btn-debt-pay" data-id="${esc(deb.debt_id)}" data-name="${esc(deb.name)}">Ghi nhận thanh toán</button>` : ''}
+      ${!paidOff ? `<button class="btn small btn-debt-schedule" data-id="${esc(deb.debt_id)}">📅 Lịch trả nợ</button>` : ''}
       <button class="btn small btn-debt-edit" data-id="${esc(deb.debt_id)}">Sửa</button>
       ${!paidOff
         ? `<button class="btn small btn-debt-status" data-id="${esc(deb.debt_id)}" data-status="paid_off">Đánh dấu đã tất toán</button>`
@@ -927,6 +974,7 @@ function debtCardHTML(deb) {
 
 function openDebtForm(debtId, debts) {
   $('#debt-payment-form').hidden = true;
+  $('#debt-schedule').hidden = true;
   $('#debt-form').hidden = false;
   currentDebtId = debtId || null;
   const deb = debtId ? (debts || []).find(x => x.debt_id === debtId) : null;
@@ -972,13 +1020,40 @@ $('#btn-save-debt').addEventListener('click', async () => {
 
 function openPaymentForm(debtId, name) {
   $('#debt-form').hidden = true;
+  $('#debt-schedule').hidden = true;
   $('#debt-payment-form').hidden = false;
   paymentDebtId = debtId;
   $('#dpy-debt-name').textContent = name;
   $('#dpy-date').value = new Date().toISOString().slice(0, 10);
-  $('#dpy-amount').value = '';
+  // Pre-fill with the estimated next installment; user overwrites with the
+  // actual amount from the bank statement if it differs.
+  const deb = lastDebts.find(x => x.debt_id === debtId);
+  const est = deb ? estimateNextEMI(deb) : null;
+  $('#dpy-amount').value = est || '';
   $('#dpy-notes').value = '';
 }
+
+async function openScheduleView(debtId) {
+  $('#debt-form').hidden = true;
+  $('#debt-payment-form').hidden = true;
+  try {
+    const s = await api('getDebtSchedule', { debtId });
+    $('#debt-schedule').hidden = false;
+    $('#dsc-debt-name').textContent = s.debt.name;
+    $('#dsc-summary').innerHTML =
+      `Còn <b>${s.summary.installments}</b> kỳ · Tổng lãi còn phải trả: <b class="expense">${fmtVND(s.summary.totalInterest)}</b> · ` +
+      `Tổng gốc + lãi: <b>${fmtVND(s.summary.totalPayment)}</b> · Dự kiến tất toán: <b>${esc(s.summary.payoffDate)}</b>`;
+    $('#dsc-table').innerHTML = `<table>
+      <thead><tr><th>Kỳ</th><th>Ngày đến hạn</th><th>Gốc</th><th>Lãi</th><th>Tổng trả (EMI)</th><th>Dư nợ còn lại</th></tr></thead>
+      <tbody>${s.rows.map((r, i) => `<tr class="${i === 0 ? 'next-installment' : ''}">
+        <td class="money">${r.k}</td><td class="money">${esc(r.due_date)}</td>
+        <td class="money">${fmtVND(r.principal)}</td><td class="money">${fmtVND(r.interest)}</td>
+        <td class="money"><b>${fmtVND(r.emi)}</b></td><td class="money">${fmtVND(r.balance_after)}</td>
+      </tr>`).join('')}</tbody></table>`;
+    $('#debt-schedule').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  } catch (e) { toast('Lỗi: ' + e.message); }
+}
+$('#btn-close-schedule').addEventListener('click', () => $('#debt-schedule').hidden = true);
 $('#btn-cancel-payment').addEventListener('click', () => $('#debt-payment-form').hidden = true);
 $('#btn-save-payment').addEventListener('click', async () => {
   try {

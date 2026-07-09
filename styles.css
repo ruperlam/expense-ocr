@@ -606,6 +606,10 @@ td input[type=number] { font-family: var(--mono); }
 .debt-card-meta { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: 12.5px; color: var(--text-muted); margin-bottom: 4px; }
 .debt-card-meta b { color: var(--text-main); font-family: var(--mono); }
 .debt-notes { font-size: 12px; margin: 2px 0 6px; }
+.pay-filter { margin-bottom: 12px; }
+.schedule-wrap { max-height: 480px; overflow-y: auto; }
+.schedule-wrap thead th { position: sticky; top: 0; background: var(--card-bg); z-index: 1; }
+tr.next-installment td { background: rgba(56, 178, 172, 0.12); font-weight: 600; }
 
 /* ============================================================
    ALERTS, TOASTS & DRAFTS
