@@ -1144,8 +1144,9 @@ $('#btn-save-cfg').addEventListener('click', async () => {
   localStorage.setItem(CFG_KEY, JSON.stringify(cfg));
   $('#cfg-status').textContent = 'Đang kiểm tra kết nối…';
   try {
-    await api('ping');
-    $('#cfg-status').textContent = '✅ Kết nối thành công!';
+    const r = await api('ping');
+    $('#cfg-status').textContent = '✅ Kết nối thành công!' +
+      (r.version ? ` Backend v${r.version}.` : ' ⚠️ Backend đang chạy bản CŨ (trước v0.4.3) — cần deploy phiên bản mới trên Apps Script.');
     toast('Đã kết nối backend.');
     loadSettingsPage();
   } catch (e) {
