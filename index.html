@@ -7,7 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&family=Playfair+Display:ital,wght@0,400;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="styles.css?v=4">
+<link rel="stylesheet" href="styles.css?v=5">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
 </head>
 <body>
@@ -444,30 +444,6 @@
     <div class="card">
       <div id="tx-table" class="tx-list"></div>
     </div>
-
-    <!-- Manual transaction form -->
-    <div id="tx-form" class="card form-card" hidden>
-      <h2>Thêm giao dịch thủ công</h2>
-      <div class="form-grid">
-        <label>Ngày <input type="date" id="mtx-date" class="input"></label>
-        <label>Nơi chi / nguồn thu <input type="text" id="mtx-supplier" class="input" placeholder="VD: Coopmart, Lương tháng 7"></label>
-        <label>Loại <select id="mtx-type" class="input"></select></label>
-        <label>Nhóm chi tiêu <select id="mtx-group" class="input"></select></label>
-        <label>Số tiền (VND) <input type="number" id="mtx-amount" class="input" placeholder="125000"></label>
-        <label>Thanh toán
-          <select id="mtx-payment" class="input">
-            <option value="cash">Tiền mặt</option><option value="card">Thẻ</option>
-            <option value="bank_transfer">Chuyển khoản</option><option value="e-wallet">Ví điện tử</option>
-            <option value="unknown">Không rõ</option>
-          </select>
-        </label>
-        <label class="span2">Ghi chú <input type="text" id="mtx-notes" class="input"></label>
-      </div>
-      <div class="btn-row">
-        <button class="btn primary" id="btn-save-tx">Lưu giao dịch</button>
-        <button class="btn" id="btn-cancel-tx">Hủy</button>
-      </div>
-    </div>
   </section>
 
   <!-- ============ UPLOAD / TAKE PHOTO ============ -->
@@ -715,10 +691,38 @@
 
   <!-- ============ CATEGORIES ============ -->
   <section id="page-categories" class="page">
-    <header class="page-head"><h1>Danh mục</h1></header>
+    <header class="page-head">
+      <div>
+        <h1>Danh mục</h1>
+        <p class="page-sub">Thêm / xóa loại giao dịch, nhóm thu nhập, nhóm chi tiêu và danh mục con</p>
+      </div>
+    </header>
     <div class="grid-2">
-      <div class="card"><h2>Loại giao dịch</h2><div id="cat-types" class="chip-list"></div></div>
-      <div class="card"><h2>Nhóm chi tiêu</h2><div id="cat-groups" class="chip-list"></div></div>
+      <div class="card">
+        <h2>Loại giao dịch</h2>
+        <div id="cat-types" class="chip-list"></div>
+        <div class="cat-add-row">
+          <input type="text" id="cat-new-type" class="input" placeholder="Thêm loại giao dịch…">
+          <button class="btn small primary" id="btn-cat-add-type">+ Thêm</button>
+        </div>
+      </div>
+      <div class="card">
+        <h2>Nhóm thu nhập</h2>
+        <div id="cat-incomes" class="chip-list"></div>
+        <div class="cat-add-row">
+          <input type="text" id="cat-new-income" class="input" placeholder="VD: Salary, Bonus…">
+          <button class="btn small primary" id="btn-cat-add-income">+ Thêm</button>
+        </div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>Nhóm chi tiêu &amp; danh mục con</h2>
+      <p class="muted">Bấm <b>＋ Danh mục con</b> trên từng nhóm để thêm mục con (VD: Food &amp; Dining → Breakfast, Lunch, Dinner, Cafe).</p>
+      <div id="cat-groups-tree"></div>
+      <div class="cat-add-row">
+        <input type="text" id="cat-new-group" class="input" placeholder="Thêm nhóm chi tiêu mới…">
+        <button class="btn small primary" id="btn-cat-add-group">+ Thêm nhóm</button>
+      </div>
     </div>
   </section>
 
@@ -776,9 +780,51 @@
 
 </main>
 
+<!-- ============ ADD-TRANSACTION MODAL (shared by Dashboard / Income / Expense / Transactions) ============ -->
+<div id="tx-modal" class="modal-overlay" hidden>
+  <div id="tx-form" class="card form-card modal-card" role="dialog" aria-modal="true" aria-labelledby="tx-modal-title">
+    <button class="modal-close" id="btn-close-tx" aria-label="Đóng">✕</button>
+    <h2 id="tx-modal-title">Thêm giao dịch thủ công</h2>
+    <div class="form-grid">
+      <label>Ngày <input type="date" id="mtx-date" class="input"></label>
+      <label>Nơi chi / nguồn thu <input type="text" id="mtx-supplier" class="input" placeholder="VD: Coopmart, Lương tháng 7"></label>
+      <label>Loại <select id="mtx-type" class="input"></select></label>
+      <label><span id="mtx-group-label">Nhóm chi tiêu</span> <select id="mtx-group" class="input"></select></label>
+      <label id="mtx-sub-wrap">Danh mục con <select id="mtx-sub" class="input"></select></label>
+      <label>Số tiền (VND) <input type="number" id="mtx-amount" class="input" placeholder="125000"></label>
+      <label>Thanh toán
+        <select id="mtx-payment" class="input">
+          <option value="cash">Tiền mặt</option><option value="card">Thẻ</option>
+          <option value="bank_transfer">Chuyển khoản</option><option value="e-wallet">Ví điện tử</option>
+          <option value="unknown">Không rõ</option>
+        </select>
+      </label>
+      <label class="span2">Ghi chú <input type="text" id="mtx-notes" class="input"></label>
+    </div>
+    <div class="btn-row">
+      <button class="btn primary" id="btn-save-tx">Lưu giao dịch</button>
+      <button class="btn" id="btn-cancel-tx">Hủy</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ DUPLICATE-RECEIPT MODAL ============ -->
+<div id="dup-modal" class="modal-overlay" hidden>
+  <div class="card form-card modal-card" role="alertdialog" aria-modal="true">
+    <button class="modal-close" id="btn-dup-close" aria-label="Đóng">✕</button>
+    <h2>⚠️ Hóa đơn trùng</h2>
+    <p id="dup-msg" class="muted"></p>
+    <p class="muted">Để không ghi đè bản cũ, bạn nên xóa bản nháp này. Nếu đây thật sự là một hóa đơn khác (mua 2 lần cùng ngày), chọn "Vẫn duyệt".</p>
+    <div class="btn-row">
+      <button class="btn danger" id="btn-dup-delete">🗑 Xóa bản nháp trùng</button>
+      <button class="btn" id="btn-dup-force">Vẫn duyệt (không trùng)</button>
+    </div>
+  </div>
+</div>
+
 <div id="toast" hidden></div>
 <div id="loader" hidden><div class="spinner"></div><p id="loader-text">Đang xử lý…</p></div>
 
-<script src="app.js?v=4"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

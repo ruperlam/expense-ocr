@@ -61,12 +61,18 @@ function showPage(name) {
 $$('.nav-btn, .top-nav-link[data-page]').forEach(b => b.addEventListener('click', () => showPage(b.dataset.page)));
 
 // ---------------- Categories cache ----------------
-let CATS = { types: [], groups: [] };
+let CATS = { types: [], groups: [], subs: {}, incomeGroups: [], raw: [] };
 async function ensureCategories() {
   if (CATS.types.length) return CATS;
   const rows = await api('getCategories', {}, { silent: true });
-  CATS.types = rows.filter(r => r.kind === 'transaction_type' && r.active !== false).map(r => r.name);
-  CATS.groups = rows.filter(r => r.kind === 'expense_group' && r.active !== false).map(r => r.name);
+  const active = rows.filter(r => r.active !== false && String(r.active).toLowerCase() !== 'false');
+  CATS.raw = active;
+  CATS.types = active.filter(r => r.kind === 'transaction_type').map(r => r.name);
+  const groups = active.filter(r => r.kind === 'expense_group');
+  CATS.groups = groups.filter(r => !r.parent).map(r => r.name);
+  CATS.subs = {};
+  groups.filter(r => r.parent).forEach(r => (CATS.subs[r.parent] = CATS.subs[r.parent] || []).push(r.name));
+  CATS.incomeGroups = active.filter(r => r.kind === 'income_group').map(r => r.name);
   return CATS;
 }
 function fillSelect(el, options, { empty = null, value = null } = {}) {
@@ -397,12 +403,69 @@ async function loadDashboard() {
 }
 $('#dash-month').addEventListener('change', () => loadDashboard().catch(e => toast(e.message)));
 
-// Dashboard quick actions
-$('#btn-quick-add').addEventListener('click', () => {
-  showPage('transactions');
-  $('#tx-form').hidden = false;
+// ============================================================
+// ADD-TRANSACTION MODAL (shared by Dashboard / Income / Expense / Transactions)
+// ============================================================
+async function openTxModal(presetType) {
+  await ensureCategories();
+  fillSelect($('#mtx-type'), CATS.types, { value: presetType || 'Expense' });
+  refreshTxGroupSelects();
+  $('#tx-modal-title').textContent =
+    presetType === 'Income' ? 'Thêm thu nhập' :
+    presetType === 'Expense' ? 'Thêm chi tiêu' : 'Thêm giao dịch thủ công';
   $('#mtx-date').value = new Date().toISOString().slice(0, 10);
+  $('#tx-modal').hidden = false;
+  $('#mtx-supplier').focus();
+}
+function closeTxModal() { $('#tx-modal').hidden = true; }
+
+/** Group select follows Loại (expense groups vs income groups); the
+ * sub-category select only shows for groups that actually have children. */
+function refreshTxGroupSelects() {
+  const isIncome = $('#mtx-type').value === 'Income';
+  $('#mtx-group-label').textContent = isIncome ? 'Nhóm thu nhập' : 'Nhóm chi tiêu';
+  fillSelect($('#mtx-group'), isIncome ? (CATS.incomeGroups.length ? CATS.incomeGroups : ['Other Income']) : CATS.groups,
+    { value: $('#mtx-group').value || null });
+  refreshTxSubSelect();
+}
+function refreshTxSubSelect() {
+  const isIncome = $('#mtx-type').value === 'Income';
+  const subs = isIncome ? [] : (CATS.subs[$('#mtx-group').value] || []);
+  $('#mtx-sub-wrap').hidden = subs.length === 0;
+  fillSelect($('#mtx-sub'), subs, { empty: '— Không chọn —' });
+}
+$('#mtx-type').addEventListener('change', refreshTxGroupSelects);
+$('#mtx-group').addEventListener('change', refreshTxSubSelect);
+
+$('#btn-close-tx').addEventListener('click', closeTxModal);
+$('#btn-cancel-tx').addEventListener('click', closeTxModal);
+$('#tx-modal').addEventListener('click', (e) => { if (e.target === $('#tx-modal')) closeTxModal(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !$('#tx-modal').hidden) closeTxModal(); });
+
+$('#btn-save-tx').addEventListener('click', async () => {
+  try {
+    await api('addTransaction', {
+      receipt_date: $('#mtx-date').value,
+      supplier: $('#mtx-supplier').value.trim(),
+      transaction_type: $('#mtx-type').value,
+      expense_group: $('#mtx-group').value,
+      sub_group: $('#mtx-sub-wrap').hidden ? '' : $('#mtx-sub').value,
+      total_amount: $('#mtx-amount').value,
+      payment_method: $('#mtx-payment').value,
+      notes: $('#mtx-notes').value.trim()
+    });
+    toast('Đã lưu giao dịch.');
+    closeTxModal();
+    $('#mtx-amount').value = ''; $('#mtx-supplier').value = ''; $('#mtx-notes').value = '';
+    // Refresh whatever page is currently on screen
+    const active = $('.page.active');
+    const name = active ? active.id.replace('page-', '') : '';
+    (pageLoaders[name] || (() => {}))().catch?.(e => toast(e.message));
+  } catch (e) { toast('Lỗi: ' + e.message); }
 });
+
+// Dashboard quick actions
+$('#btn-quick-add').addEventListener('click', () => openTxModal().catch(e => toast(e.message)));
 $('#btn-quick-scan').addEventListener('click', () => { showPage('upload'); scanIncoming(); });
 $('#btn-export').addEventListener('click', exportCSV);
 
@@ -430,13 +493,12 @@ function txRowHTML(r) {
   const sign = r.transaction_type === 'Income' || r.transaction_type === 'Refund' ? 'income' : 'expense';
   return `<div class="tx-row">
     <span class="tx-date">${esc(r.receipt_date)}</span>
-    <span class="tx-main">${esc(r.supplier || '(không rõ)')}<small>${esc(r.transaction_type)}${r.expense_group ? ' · ' + esc(r.expense_group) : ''}${r.source ? ' · ' + esc(r.source) : ''}</small></span>
+    <span class="tx-main">${esc(r.supplier || '(không rõ)')}<small>${esc(r.transaction_type)}${r.expense_group ? ' · ' + esc(r.expense_group) : ''}${r.sub_group ? ' › ' + esc(r.sub_group) : ''}${r.source ? ' · ' + esc(r.source) : ''}</small></span>
     <span class="tx-amt ${sign}">${sign === 'income' ? '+' : '−'}${fmtVND(r.total_amount)}</span>
   </div>`;
 }
 
 /** Preset the manual-transaction-form type when opened from the Income/Expense quick-add buttons. */
-let presetTxType = null;
 
 // ============================================================
 // INCOME
@@ -491,12 +553,7 @@ async function loadIncomePage() {
   $('#inc-recent').innerHTML = incomeRows.slice(0, 10).map(txRowHTML).join('') || '<p class="muted">Chưa có giao dịch thu nhập tháng này.</p>';
 }
 $('#inc-month').addEventListener('change', () => loadIncomePage().catch(e => toast(e.message)));
-$('#btn-inc-add').addEventListener('click', () => {
-  presetTxType = 'Income';
-  showPage('transactions');
-  $('#tx-form').hidden = false;
-  $('#mtx-date').value = new Date().toISOString().slice(0, 10);
-});
+$('#btn-inc-add').addEventListener('click', () => openTxModal('Income').catch(e => toast(e.message)));
 
 // ============================================================
 // EXPENSE
@@ -552,12 +609,7 @@ async function loadExpensePage() {
   $('#exp-recent').innerHTML = rows.map(txRowHTML).join('') || '<p class="muted">Chưa có giao dịch chi tiêu tháng này.</p>';
 }
 $('#exp-month').addEventListener('change', () => loadExpensePage().catch(e => toast(e.message)));
-$('#btn-exp-add').addEventListener('click', () => {
-  presetTxType = 'Expense';
-  showPage('transactions');
-  $('#tx-form').hidden = false;
-  $('#mtx-date').value = new Date().toISOString().slice(0, 10);
-});
+$('#btn-exp-add').addEventListener('click', () => openTxModal('Expense').catch(e => toast(e.message)));
 
 // ============================================================
 // TRANSACTIONS
@@ -566,9 +618,6 @@ async function loadTransactions() {
   await ensureCategories();
   fillSelect($('#tx-type'), CATS.types, { empty: '— Loại —', value: $('#tx-type').value });
   fillSelect($('#tx-group'), CATS.groups, { empty: '— Nhóm —', value: $('#tx-group').value });
-  fillSelect($('#mtx-type'), CATS.types, { value: presetTxType || 'Expense' });
-  fillSelect($('#mtx-group'), CATS.groups);
-  presetTxType = null;
 
   const rows = await api('getTransactions', {
     month: $('#tx-month').value || undefined,
@@ -578,28 +627,7 @@ async function loadTransactions() {
   $('#tx-table').innerHTML = rows.map(txRowHTML).join('') || '<p class="muted">Không có giao dịch.</p>';
 }
 $('#btn-tx-filter').addEventListener('click', () => loadTransactions().catch(e => toast(e.message)));
-$('#btn-add-tx').addEventListener('click', () => {
-  $('#tx-form').hidden = false;
-  $('#mtx-date').value = new Date().toISOString().slice(0, 10);
-});
-$('#btn-cancel-tx').addEventListener('click', () => $('#tx-form').hidden = true);
-$('#btn-save-tx').addEventListener('click', async () => {
-  try {
-    await api('addTransaction', {
-      receipt_date: $('#mtx-date').value,
-      supplier: $('#mtx-supplier').value.trim(),
-      transaction_type: $('#mtx-type').value,
-      expense_group: $('#mtx-group').value,
-      total_amount: $('#mtx-amount').value,
-      payment_method: $('#mtx-payment').value,
-      notes: $('#mtx-notes').value.trim()
-    });
-    toast('Đã lưu giao dịch.');
-    $('#tx-form').hidden = true;
-    $('#mtx-amount').value = ''; $('#mtx-supplier').value = ''; $('#mtx-notes').value = '';
-    loadTransactions();
-  } catch (e) { toast('Lỗi: ' + e.message); }
-});
+$('#btn-add-tx').addEventListener('click', () => openTxModal().catch(e => toast(e.message)));
 
 // ============================================================
 // UPLOAD / TAKE PHOTO / SCAN
@@ -779,6 +807,8 @@ $('#btn-save-draft').addEventListener('click', async () => {
   catch (e) { toast('Lỗi: ' + e.message); }
 });
 
+let dupPendingPayload = null; // approve payload waiting on the duplicate modal
+
 $('#btn-approve').addEventListener('click', async () => {
   const p = collectDraftEdits();
   if (!p.receipt.total_amount) return toast('Thiếu tổng tiền — không thể duyệt.');
@@ -793,11 +823,38 @@ $('#btn-approve').addEventListener('click', async () => {
     toast('✅ Đã duyệt — mã giao dịch ' + r.receiptId);
     loadReviewList();
   } catch (e) {
-    if (/duplicate/i.test(e.message) && confirm('Có thể trùng hóa đơn đã có:\n' + e.message + '\n\nVẫn duyệt?')) {
-      try { const r = await api('approveDraft', { ...p, forceDuplicate: true }); toast('✅ Đã duyệt — ' + r.receiptId); loadReviewList(); }
-      catch (e2) { toast('Lỗi: ' + e2.message); }
+    if (/duplicate/i.test(e.message)) {
+      dupPendingPayload = p;
+      $('#dup-msg').textContent = e.message;
+      $('#dup-modal').hidden = false;
     } else toast('Lỗi: ' + e.message);
   }
+});
+
+function closeDupModal() { $('#dup-modal').hidden = true; dupPendingPayload = null; }
+$('#btn-dup-close').addEventListener('click', closeDupModal);
+$('#dup-modal').addEventListener('click', (e) => { if (e.target === $('#dup-modal')) closeDupModal(); });
+
+// "Xóa bản nháp trùng": reject the draft so it disappears from the review tab —
+// the already-approved receipt stays untouched.
+$('#btn-dup-delete').addEventListener('click', async () => {
+  const p = dupPendingPayload; closeDupModal();
+  if (!p) return;
+  try {
+    await api('rejectDraft', { draftId: p.draftId, reason: 'Trùng hóa đơn — ' + $('#dup-msg').textContent });
+    toast('🗑 Đã xóa bản nháp trùng — bản ghi cũ được giữ nguyên.');
+    loadReviewList();
+  } catch (e) { toast('Lỗi: ' + e.message); }
+});
+
+$('#btn-dup-force').addEventListener('click', async () => {
+  const p = dupPendingPayload; closeDupModal();
+  if (!p) return;
+  try {
+    const r = await api('approveDraft', { ...p, forceDuplicate: true });
+    toast('✅ Đã duyệt — ' + r.receiptId);
+    loadReviewList();
+  } catch (e) { toast('Lỗi: ' + e.message); }
 });
 
 $('#btn-reject').addEventListener('click', async () => {
@@ -1090,11 +1147,53 @@ async function deleteDebtRow(debtId) {
 // CATEGORIES / RULES / SETTINGS / LOGS
 // ============================================================
 async function loadCategoriesPage() {
-  CATS = { types: [], groups: [] };
+  CATS = { types: [], groups: [], subs: {}, incomeGroups: [], raw: [] };
   await ensureCategories();
-  $('#cat-types').innerHTML = CATS.types.map(t => `<span class="chip">${esc(t)}</span>`).join('');
-  $('#cat-groups').innerHTML = CATS.groups.map(g => `<span class="chip">${esc(g)}</span>`).join('');
+  const idOf = (kind, name, parent) => {
+    const r = CATS.raw.find(x => x.kind === kind && x.name === name && String(x.parent || '') === (parent || ''));
+    return r ? r.category_id : '';
+  };
+  const chip = (kind, name, parent) =>
+    `<span class="chip">${esc(name)}<button class="chip-del" title="Xóa" data-id="${esc(idOf(kind, name, parent))}" data-name="${esc(name)}">×</button></span>`;
+
+  $('#cat-types').innerHTML = CATS.types.map(t => chip('transaction_type', t)).join('') || '<p class="muted">Chưa có.</p>';
+  $('#cat-incomes').innerHTML = CATS.incomeGroups.map(g => chip('income_group', g)).join('') || '<p class="muted">Chưa có.</p>';
+  $('#cat-groups-tree').innerHTML = CATS.groups.map(g => `
+    <div class="cat-group-row">
+      <div class="cat-group-head">${chip('expense_group', g)}
+        <button class="btn small btn-cat-add-sub" data-group="${esc(g)}">＋ Danh mục con</button>
+      </div>
+      <div class="chip-list cat-sub-list">${(CATS.subs[g] || []).map(sc => chip('expense_group', sc, g)).join('') || '<span class="muted" style="font-size:12px">Chưa có danh mục con</span>'}</div>
+    </div>`).join('');
+
+  $$('#page-categories .chip-del').forEach(b => b.addEventListener('click', async () => {
+    if (!b.dataset.id) return toast('Không tìm thấy mã danh mục.');
+    if (!confirm(`Xóa danh mục "${b.dataset.name}"?`)) return;
+    try { await api('deleteCategory', { categoryId: b.dataset.id }); toast('Đã xóa.'); loadCategoriesPage(); }
+    catch (e) { toast('Lỗi: ' + e.message); }
+  }));
+  $$('#page-categories .btn-cat-add-sub').forEach(b => b.addEventListener('click', async () => {
+    const name = prompt(`Tên danh mục con cho "${b.dataset.group}":\n(VD: Breakfast, Lunch, Dinner, Cafe)`);
+    if (!name || !name.trim()) return;
+    try { await api('saveCategory', { kind: 'expense_group', name: name.trim(), parent: b.dataset.group }); toast('Đã thêm.'); loadCategoriesPage(); }
+    catch (e) { toast('Lỗi: ' + e.message); }
+  }));
 }
+
+async function addCategoryFromInput(inputSel, kind) {
+  const el = $(inputSel);
+  const name = el.value.trim();
+  if (!name) return toast('Nhập tên danh mục trước.');
+  try {
+    await api('saveCategory', { kind, name });
+    el.value = '';
+    toast('Đã thêm "' + name + '".');
+    loadCategoriesPage();
+  } catch (e) { toast('Lỗi: ' + e.message); }
+}
+$('#btn-cat-add-type').addEventListener('click', () => addCategoryFromInput('#cat-new-type', 'transaction_type'));
+$('#btn-cat-add-income').addEventListener('click', () => addCategoryFromInput('#cat-new-income', 'income_group'));
+$('#btn-cat-add-group').addEventListener('click', () => addCategoryFromInput('#cat-new-group', 'expense_group'));
 
 async function loadRules() {
   await ensureCategories();

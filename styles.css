@@ -633,6 +633,55 @@ td input[type=number] { font-family: var(--mono); }
 .debt-card-meta b { color: var(--text-main); font-family: var(--mono); }
 .debt-notes { font-size: 12px; margin: 2px 0 6px; }
 .pay-filter { margin-bottom: 12px; }
+
+/* Categories CRUD */
+.chip-del {
+  border: none; background: none; color: var(--text-muted); cursor: pointer;
+  font-size: 14px; line-height: 1; padding: 0 0 0 6px; border-radius: 50%;
+}
+.chip-del:hover { color: #C0392B; }
+.cat-add-row { display: flex; gap: 8px; margin-top: 14px; align-items: center; }
+.cat-add-row .input { flex: 1; margin-top: 0; }
+.cat-group-row { padding: 10px 0; border-bottom: 1px dashed var(--border-highlight); }
+.cat-group-row:last-of-type { border-bottom: none; }
+.cat-group-head { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.cat-group-head .chip { font-weight: 600; }
+.cat-sub-list { margin: 8px 0 0 18px; }
+
+/* ============================================================
+   MODAL (popup forms)
+   ============================================================ */
+.modal-overlay {
+  position: fixed; inset: 0; z-index: 90;
+  background: rgba(15, 26, 32, 0.55);
+  -webkit-backdrop-filter: blur(6px); backdrop-filter: blur(6px);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.modal-overlay[hidden] { display: none !important; }
+.modal-card {
+  position: relative; width: 100%; max-width: 560px;
+  max-height: calc(100vh - 40px); max-height: calc(100dvh - 40px);
+  overflow-y: auto; margin: 0;
+  animation: modal-pop 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+.modal-close {
+  position: absolute; top: 14px; right: 14px;
+  width: 32px; height: 32px; border-radius: 50%;
+  border: 1px solid var(--border-highlight); background: var(--card-bg-hover);
+  color: var(--text-muted); font-size: 14px; line-height: 1; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.2s;
+}
+.modal-close:hover { color: var(--text-main); background: var(--border-soft); }
+@keyframes modal-pop {
+  from { opacity: 0; transform: translateY(14px) scale(0.97); }
+  to   { opacity: 1; transform: none; }
+}
+@media (max-width: 899px) {
+  .modal-overlay { padding: 12px; align-items: flex-end; }
+  .modal-card { max-height: 88dvh; border-radius: 20px 20px 12px 12px; }
+}
 .schedule-wrap { max-height: 480px; overflow-y: auto; }
 .schedule-wrap thead th { position: sticky; top: 0; background: var(--card-bg); z-index: 1; }
 tr.next-installment td { background: rgba(56, 178, 172, 0.12); font-weight: 600; }
