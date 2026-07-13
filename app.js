@@ -131,6 +131,152 @@ function setHealthScore(score, label) {
   $('#health-label').textContent = label;
 }
 
+// --- New Render Functions for Dashboard ---
+
+function renderWeeklyHeatmap(dailyTrend) {
+  const container = $('#weekly-heatmap');
+  if (!container) return;
+  const days = Object.keys(dailyTrend || {}).sort();
+  if (!days.length) { container.innerHTML = '<p class="muted">Không có dữ liệu</p>'; return; }
+  
+  // Build 7 columns (days of week)
+  const gridHtml = ['<div class="heatmap-grid">'];
+  
+  // Fill the grid with the last 28 days (4 weeks)
+  const recentDays = days.slice(-28);
+  
+  // Calculate max to find intensity
+  const maxExpense = Math.max(...recentDays.map(d => dailyTrend[d]), 1);
+  
+  recentDays.forEach(day => {
+    const val = dailyTrend[day];
+    const pct = val / maxExpense;
+    let level = 0;
+    if (pct > 0.75) level = 4;
+    else if (pct > 0.5) level = 3;
+    else if (pct > 0.25) level = 2;
+    else if (pct > 0) level = 1;
+    
+    gridHtml.push(`<div class="heatmap-cell level-${level}" title="${day}: ${fmtVND(val)}">
+      <span class="heatmap-label">${day.slice(8)}</span>
+    </div>`);
+  });
+  
+  gridHtml.push('</div>');
+  container.innerHTML = gridHtml.join('');
+}
+
+function renderMonthlyTactical(categoryData, budgetData) {
+  const catLabels = Object.keys(categoryData || {});
+  if (!catLabels.length) return;
+  
+  const budgetMap = {};
+  (budgetData || []).forEach(b => { budgetMap[b.expense_group] = b.budget; });
+  
+  const actuals = catLabels.map(k => categoryData[k] || 0);
+  const budgets = catLabels.map(k => budgetMap[k] || 0);
+
+  makeChart('chart-bva-monthly', {
+    type: 'bar',
+    data: {
+      labels: catLabels,
+      datasets: [
+        { label: 'Thực chi (Actual)', data: actuals, backgroundColor: '#FF7F50' },
+        { label: 'Ngân sách (Budget)', data: budgets, backgroundColor: 'rgba(56, 178, 172, 0.5)' }
+      ]
+    },
+    options: {
+      indexAxis: 'y',
+      scales: {
+        x: { grid: { color: 'rgba(0,0,0,0.05)' } },
+        y: { grid: { display: false } }
+      }
+    }
+  });
+
+  // Waterfall Chart for Variance Drivers (Mocked as simple bar with BvA differences)
+  const variances = catLabels.map(k => (budgetMap[k] || 0) - (categoryData[k] || 0));
+  const colors = variances.map(v => v >= 0 ? '#4FD1A5' : '#F3A390');
+  
+  makeChart('chart-waterfall', {
+    type: 'bar',
+    data: {
+      labels: catLabels,
+      datasets: [{
+        label: 'Chênh lệch BvA (Variance)',
+        data: variances,
+        backgroundColor: colors
+      }]
+    },
+    options: {
+      plugins: { legend: { display: false } },
+      scales: {
+        x: { grid: { display: false } },
+        y: { grid: { color: 'rgba(0,0,0,0.05)' } }
+      }
+    }
+  });
+}
+
+function renderYearlyStrategic(d) {
+  const trend = d.monthlyTrend || [];
+  if (!trend.length) return;
+  
+  // Cumulative YTD
+  let cumIncome = 0;
+  let cumExpense = 0;
+  const labels = [];
+  const ytdIncome = [];
+  const ytdExpense = [];
+  
+  trend.forEach(t => {
+    labels.push(t.month);
+    cumIncome += t.income;
+    cumExpense += t.expense;
+    ytdIncome.push(cumIncome);
+    ytdExpense.push(cumExpense);
+  });
+  
+  makeChart('chart-ytd-cumulative', {
+    type: 'line',
+    data: {
+      labels: labels,
+      datasets: [
+        { label: 'YTD Thu nhập', data: ytdIncome, borderColor: '#4FD1A5', backgroundColor: 'rgba(79, 209, 165, 0.2)', fill: true, tension: 0.3 },
+        { label: 'YTD Chi tiêu', data: ytdExpense, borderColor: '#F3A390', backgroundColor: 'rgba(243, 163, 144, 0.2)', fill: true, tension: 0.3 }
+      ]
+    }
+  });
+  
+  // Treemap (Requires Chart.js Treemap plugin included in index.html)
+  const catLabels = Object.keys(d.expenseByCategory || {});
+  const treeData = catLabels.map(k => ({ category: k, value: d.expenseByCategory[k] }));
+  
+  if (window.Chart && window.Chart.registry && window.Chart.registry.controllers.items.treemap) {
+    makeChart('chart-treemap', {
+      type: 'treemap',
+      data: {
+        datasets: [{
+          tree: treeData,
+          key: 'value',
+          groups: ['category'],
+          backgroundColor: (ctx) => {
+            const idx = ctx.dataIndex % NESTED_PALETTE.length;
+            return NESTED_PALETTE[idx];
+          },
+          labels: { display: true, formatter: (ctx) => ctx.raw.g }
+        }]
+      },
+      options: {
+        plugins: { legend: { display: false } }
+      }
+    });
+  } else {
+    const container = $('#chart-treemap');
+    if (container) container.outerHTML = '<p class="muted">Treemap plugin not loaded</p>';
+  }
+}
+
 async function loadDashboard() {
   const month = $('#dash-month').value || new Date().toISOString().slice(0, 7);
   $('#dash-month').value = month;
@@ -156,14 +302,17 @@ async function loadDashboard() {
   net.className = 'money ' + (d.kpi.netCashFlow >= 0 ? 'income' : 'expense');
   $('#d-net').innerHTML = prev ? deltaHTML(cur.income - cur.expense, prev.income - prev.expense) : '';
 
-  // Budget remaining (sum of monthly budgets)
+  // Actual vs Budget (BvA) remaining
   const mb = d.monthlyBudgets || [];
   if (mb.length) {
-    const left = mb.reduce((s, b) => s + b.remaining, 0);
+    const totalBudget = mb.reduce((s, b) => s + b.budget, 0);
+    const totalSpent = mb.reduce((s, b) => s + b.spent, 0);
+    const left = totalBudget - totalSpent;
+    const pct = totalBudget > 0 ? Math.round((totalSpent / totalBudget) * 100) : 0;
     const bl = $('#kpi-budget-left');
     bl.textContent = fmtVND(left);
     bl.className = 'money ' + (left >= 0 ? 'income' : 'expense');
-    $('#d-budget').textContent = `trên tổng ${fmtVND(mb.reduce((s, b) => s + b.budget, 0))}`;
+    $('#d-budget').innerHTML = `<span class="delta ${pct > 100 ? 'down' : 'up'}">${pct}% utilized</span>`;
   } else {
     $('#kpi-budget-left').textContent = '—';
     $('#d-budget').textContent = 'chưa đặt ngân sách tháng';
@@ -251,26 +400,45 @@ async function loadDashboard() {
   gradDaily.addColorStop(0, 'rgba(56, 178, 172, 0.35)'); /* Teal */
   gradDaily.addColorStop(1, 'rgba(56, 178, 172, 0.0)');
 
+  // 7-day Moving Average Calculation
+  const dailyRaw = days.map(k => d.dailyTrend[k]);
+  const ma7 = dailyRaw.map((val, idx, arr) => {
+    if (idx < 6) return null; // Not enough data for 7-day MA
+    let sum = 0;
+    for (let i = 0; i < 7; i++) sum += arr[idx - i];
+    return sum / 7;
+  });
+
   makeChart('chart-daily', {
     type: 'line',
     data: { 
       labels: days.map(x => x.slice(8)), 
-      datasets: [{ 
-        label: 'Chi tiêu', 
-        data: days.map(k => d.dailyTrend[k]), 
-        borderColor: '#38B2AC', 
-        borderWidth: 3,
-        backgroundColor: gradDaily, 
-        fill: true, 
-        tension: .38, 
-        pointRadius: 2,
-        pointHoverRadius: 5,
-        pointBackgroundColor: '#38B2AC',
-        pointBorderColor: '#FFFFFF'
-      }] 
+      datasets: [
+        { 
+          label: 'Chi tiêu hằng ngày', 
+          data: dailyRaw, 
+          borderColor: 'rgba(56, 178, 172, 0.4)', 
+          borderWidth: 2,
+          backgroundColor: gradDaily, 
+          fill: true, 
+          tension: .38, 
+          pointRadius: 1
+        },
+        { 
+          label: '7-day MA', 
+          data: ma7, 
+          borderColor: '#FF7F50', 
+          borderWidth: 3,
+          backgroundColor: 'transparent',
+          fill: false, 
+          tension: .38, 
+          pointRadius: 0,
+          pointHoverRadius: 4
+        }
+      ] 
     },
     options: { 
-      plugins: { legend: { display: false } },
+      plugins: { legend: { display: true, position: 'top' } },
       scales: {
         x: {
           grid: { color: 'rgba(0, 0, 0, 0.05)', drawBorder: false },
@@ -283,6 +451,15 @@ async function loadDashboard() {
       }
     }
   });
+
+  // Render Heatmap
+  renderWeeklyHeatmap(d.dailyTrend);
+
+  // Render Monthly Tactical View
+  renderMonthlyTactical(d.expenseByCategory, mb);
+
+  // Render Yearly Strategic View
+  renderYearlyStrategic(d);
 
   const mt = trend;
   const canvasMonthly = $('#chart-monthly');
