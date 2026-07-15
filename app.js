@@ -313,6 +313,7 @@ async function loadDashboard() {
     bl.textContent = fmtVND(left);
     bl.className = 'money ' + (left >= 0 ? 'income' : 'expense');
     $('#d-budget').innerHTML = `<span class="delta ${pct > 100 ? 'down' : 'up'}">${pct}% utilized</span>`;
+  } else {
     $('#kpi-budget-left').textContent = '—';
     $('#d-budget').textContent = 'chưa đặt ngân sách tháng';
   }
@@ -326,7 +327,8 @@ async function loadDashboard() {
     
     let dailyInc = 0, dailyExp = 0;
     todayRows.forEach(r => {
-      if (r.receipt_date.slice(0, 10) === todayStr) {
+      const rd = r.receipt_date ? String(r.receipt_date).slice(0, 10) : '';
+      if (rd === todayStr) {
         if (r.transaction_type === 'Expense') dailyExp += r.total_amount;
         else if (r.transaction_type === 'Income' || r.transaction_type === 'Refund') dailyInc += r.total_amount;
       }
