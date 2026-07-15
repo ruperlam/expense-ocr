@@ -362,7 +362,6 @@ async function loadDashboard() {
   $('#kpi-savings').textContent = savings === null ? '—' : savings + '%';
 
   const now = new Date();
-  const isCurrentMonth = month === now.toISOString().slice(0, 7);
   const daysInMonth = new Date(Number(my), Number(mm), 0).getDate();
   const daysElapsed = isCurrentMonth ? now.getDate() : daysInMonth;
   const avgDay = d.kpi.monthExpense / Math.max(daysElapsed, 1);
