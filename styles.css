@@ -167,7 +167,6 @@ body {
 .health-label { font-size: 11.5px; color: var(--text-muted); font-weight: 500; }
 
 /* ---------- Desktop (sidebar + fixed top nav) ---------- */
-@media (min-width: 900px) {
   #nav {
     top: 16px; left: 16px; bottom: 16px; width: 200px; flex-direction: column;
     gap: 6px; padding: 20px 14px; border-radius: var(--radius-lg);
@@ -183,45 +182,66 @@ body {
     box-shadow: -10px 0 30px rgba(0,0,0,0.1);
     transition: margin-left 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); 
   }
-}
 
-/* ---------- Mobile / tablet (top nav + bottom bar) ---------- */
+/* ---------- Mobile & Tablet Portrait (bottom nav) ---------- */
 @media (max-width: 899px) {
   #top-nav {
-    left: 0; height: 56px; padding: 0 14px;
+    left: 0;
+    padding: 0 16px;
+    height: 64px;
     background: var(--bg-frame);
-    justify-content: center;
   }
   .top-nav-center {
-    gap: 18px; overflow-x: auto; max-width: 100%;
-    -webkit-overflow-scrolling: touch; scrollbar-width: none;
+    display: none; /* Hide top center links on mobile */
   }
-  .top-nav-center::-webkit-scrollbar { display: none; }
-  .top-nav-link { font-size: 12.5px; white-space: nowrap; }
-  .top-nav-left, .top-nav-right { display: none; }
-
   #nav {
-    top: auto; width: auto; flex-direction: row;
-    bottom: 12px; left: 12px; right: 12px; overflow-x: auto;
-    padding: 8px 8px calc(8px + env(safe-area-inset-bottom));
-    gap: 4px; border-radius: 20px;
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.35);
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    width: 100%;
+    height: 64px;
+    flex-direction: row;
+    justify-content: space-around;
+    align-items: center;
+    padding: 0;
+    border-radius: 20px 20px 0 0;
+    border-top: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 -5px 15px rgba(0, 0, 0, 0.2);
   }
-  .brand, .health-card { display: none; }
-  .nav-btn { flex-direction: column; gap: 4px; font-size: 10px; padding: 8px 10px; flex: 1 0 auto; border-radius: 12px; align-items: center; justify-content: center; }
-  .nav-btn .badge { position: absolute; top: 2px; right: 8px; margin: 0; }
-
+  .brand, .health-card {
+    display: none !important; /* Hide brand and health card in bottom nav */
+  }
+  .nav-btn {
+    flex-direction: column;
+    gap: 4px;
+    padding: 8px 0;
+    text-align: center;
+    border-radius: 12px;
+    font-size: 10px;
+    flex: 1;
+    justify-content: center;
+  }
+  .nav-btn svg {
+    margin: 0;
+  }
+  .badge {
+    position: absolute;
+    top: 4px;
+    right: 50%;
+    margin-right: -20px;
+  }
   #main {
-    margin: 56px 0 0;
-    height: calc(100vh - 56px);
-    overflow-y: auto; -webkit-overflow-scrolling: touch;
-    background: var(--bg-main);
-    border-radius: 24px 24px 0 0;
-    padding: 20px 16px 120px;
+    margin-left: 0;
+    margin-right: 0;
+    margin-top: 64px;
+    margin-bottom: 64px;
+    height: calc(100vh - 128px);
+    border-radius: 0;
+    padding: 20px 16px 80px;
   }
-  body.nav-hidden #main { padding-bottom: 24px; }
-  h1 { font-size: 24px; }
 }
+
 
 /* ============================================================
    PINTEREST BENTO GRID & APP CARDS

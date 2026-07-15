@@ -159,6 +159,57 @@
         </div>
       </div>
 
+      <!-- ================= DAILY METRICS ================= -->
+      <h2 class="bento-item bento-item-md-12" style="margin-top: 16px; margin-bottom: 0; padding-bottom: 0; border-bottom: 1px solid var(--border-soft); font-size: 16px; display: flex; align-items: center; gap: 8px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
+        Chỉ số hôm nay
+      </h2>
+
+      <div class="kpi-card bento-item bento-item-sm-6 bento-item-md-4 bento-item-lg-3">
+        <span class="kpi-ico ico-mint">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"></line><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>
+        </span>
+        <div class="kpi-meta">
+          <label>Thu nhập ngày</label>
+          <strong id="kpi-daily-income" class="money income">0 ₫</strong>
+          <span class="delta flat">hôm nay</span>
+        </div>
+      </div>
+
+      <div class="kpi-card bento-item bento-item-sm-6 bento-item-md-4 bento-item-lg-3">
+        <span class="kpi-ico ico-peach">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2" ry="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
+        </span>
+        <div class="kpi-meta">
+          <label>Chi tiêu ngày</label>
+          <strong id="kpi-daily-expense" class="money expense">0 ₫</strong>
+          <span class="delta flat">hôm nay</span>
+        </div>
+      </div>
+
+      <div class="kpi-card bento-item bento-item-sm-6 bento-item-md-4 bento-item-lg-3">
+        <span class="kpi-ico ico-blue">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m22 7-6-6M22 7H10M2 17l6 6M2 17h12"></path></svg>
+        </span>
+        <div class="kpi-meta">
+          <label>Dòng tiền ngày</label>
+          <strong id="kpi-daily-net" class="money">0 ₫</strong>
+          <span class="delta flat">hôm nay</span>
+        </div>
+      </div>
+
+      <div class="kpi-card bento-item bento-item-sm-6 bento-item-md-4 bento-item-lg-3">
+        <span class="kpi-ico ico-cream">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>
+        </span>
+        <div class="kpi-meta">
+          <label>Actual vs Budget (Ngày)</label>
+          <strong id="kpi-daily-bva" class="money">—</strong>
+          <span class="delta flat">ước tính (BvA / 30)</span>
+        </div>
+      </div>
+
+
       <div class="kpi-card bento-item bento-item-sm-6 bento-item-md-4 bento-item-lg-3">
         <span class="kpi-ico ico-mint">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>
@@ -385,7 +436,13 @@
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="14" rx="2" ry="2"></rect><line x1="2" y1="10" x2="22" y2="10"></line></svg>
         </span>
         <div class="kpi-meta">
-          <label>Chi tiêu tháng</label>
+          <label style="margin-bottom: 2px;">
+            <select id="exp-kpi-period" style="border: none; background: transparent; font-weight: 700; color: var(--text-muted); padding: 0; outline: none; cursor: pointer; text-transform: uppercase; font-size: 11px; font-family: inherit;">
+              <option value="day">Chi tiêu ngày</option>
+              <option value="month" selected>Chi tiêu tháng</option>
+              <option value="year">Chi tiêu năm</option>
+            </select>
+          </label>
           <strong id="exp-kpi-total" class="money expense">0 ₫</strong>
           <span class="delta" id="exp-kpi-delta"></span>
         </div>

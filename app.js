@@ -313,9 +313,45 @@ async function loadDashboard() {
     bl.textContent = fmtVND(left);
     bl.className = 'money ' + (left >= 0 ? 'income' : 'expense');
     $('#d-budget').innerHTML = `<span class="delta ${pct > 100 ? 'down' : 'up'}">${pct}% utilized</span>`;
-  } else {
     $('#kpi-budget-left').textContent = '—';
     $('#d-budget').textContent = 'chưa đặt ngân sách tháng';
+  }
+
+  // ----- KPI Daily (Hôm nay) -----
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const isCurrentMonth = month === todayStr.slice(0, 7);
+  
+  if (isCurrentMonth) {
+    const todayRows = await api('getTransactions', { month: todayStr.slice(0, 7), limit: 1000 }, { silent: true });
+    
+    let dailyInc = 0, dailyExp = 0;
+    todayRows.forEach(r => {
+      if (r.receipt_date.slice(0, 10) === todayStr) {
+        if (r.transaction_type === 'Expense') dailyExp += r.total_amount;
+        else if (r.transaction_type === 'Income' || r.transaction_type === 'Refund') dailyInc += r.total_amount;
+      }
+    });
+    
+    $('#kpi-daily-income').textContent = fmtVND(dailyInc);
+    $('#kpi-daily-expense').textContent = fmtVND(dailyExp);
+    
+    const dailyNet = dailyInc - dailyExp;
+    const dailyNetEl = $('#kpi-daily-net');
+    dailyNetEl.textContent = fmtVND(dailyNet);
+    dailyNetEl.className = 'money ' + (dailyNet >= 0 ? 'income' : 'expense');
+    
+    if (mb.length) {
+      const totalBudget = mb.reduce((s, b) => s + b.budget, 0);
+      const dailyBva = Math.round(totalBudget / 30);
+      $('#kpi-daily-bva').textContent = fmtVND(dailyBva);
+    } else {
+      $('#kpi-daily-bva').textContent = '—';
+    }
+  } else {
+    $('#kpi-daily-income').textContent = '0 ₫';
+    $('#kpi-daily-expense').textContent = '0 ₫';
+    $('#kpi-daily-net').textContent = '0 ₫';
+    $('#kpi-daily-bva').textContent = '—';
   }
 
   // ----- KPI row 2 -----
@@ -745,8 +781,62 @@ async function loadExpensePage() {
   const cur = idx >= 0 ? trend[idx] : { expense: d.kpi.monthExpense };
   const prev = idx > 0 ? trend[idx - 1] : null;
 
-  $('#exp-kpi-total').textContent = fmtVND(d.kpi.monthExpense);
-  $('#exp-kpi-delta').innerHTML = prev ? deltaHTML(cur.expense, prev.expense, { invert: true }) : '';
+  // Track the raw data to use in the dropdown change handler
+  window._currentExpenseData = {
+    month: d.kpi.monthExpense,
+    prevMonth: prev ? prev.expense : null,
+    day: 0,
+    prevDay: null,
+    year: 0,
+    prevYear: null
+  };
+  
+  // Calculate today's expense if in current month
+  const todayStr = new Date().toISOString().slice(0, 10);
+  if (month === todayStr.slice(0, 7)) {
+    window._currentExpenseData.day = d.dailyTrend[todayStr] || 0;
+    // We could fetch yesterday's, but for simplicity, we leave prevDay as null or try to find it
+    const yesterday = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
+    window._currentExpenseData.prevDay = d.dailyTrend[yesterday] || 0;
+  }
+  
+  // Year expense from YearlyBudgets (summing spent) or we can approximate
+  // We can just calculate total spent this year from d.yearlyBudgets if available
+  if (d.yearlyBudgets && d.yearlyBudgets.length > 0) {
+    window._currentExpenseData.year = d.yearlyBudgets.reduce((sum, b) => sum + b.spent, 0);
+  }
+
+  // Update total based on current dropdown selection
+  const periodSel = $('#exp-kpi-period');
+  const updateExpenseKPI = () => {
+    const p = periodSel ? periodSel.value : 'month';
+    let val = 0;
+    let deltaHtml = '';
+    
+    if (p === 'day') {
+      val = window._currentExpenseData.day;
+      if (window._currentExpenseData.prevDay !== null) {
+        deltaHtml = deltaHTML(val, window._currentExpenseData.prevDay, { invert: true, label: 'so với hôm qua' });
+      }
+    } else if (p === 'year') {
+      val = window._currentExpenseData.year;
+      deltaHtml = '';
+    } else {
+      val = window._currentExpenseData.month;
+      deltaHtml = window._currentExpenseData.prevMonth !== null 
+        ? deltaHTML(val, window._currentExpenseData.prevMonth, { invert: true, label: 'so với tháng trước' }) 
+        : '';
+    }
+    
+    $('#exp-kpi-total').textContent = fmtVND(val);
+    $('#exp-kpi-delta').innerHTML = deltaHtml;
+  };
+
+  if (periodSel) {
+    periodSel.removeEventListener('change', updateExpenseKPI);
+    periodSel.addEventListener('change', updateExpenseKPI);
+  }
+  updateExpenseKPI();
 
   const [my, mm] = month.split('-');
   const now = new Date();
