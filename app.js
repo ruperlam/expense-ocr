@@ -252,7 +252,9 @@ function renderYearlyStrategic(d) {
   const catLabels = Object.keys(d.expenseByCategory || {});
   const treeData = catLabels.map(k => ({ category: k, value: d.expenseByCategory[k] }));
   
-  if (window.Chart && window.Chart.registry && window.Chart.registry.controllers.items.treemap) {
+  let treemapOK = false;
+  try { treemapOK = !!window.Chart.registry.getController('treemap'); } catch (e) { /* not registered */ }
+  if (treemapOK) {
     makeChart('chart-treemap', {
       type: 'treemap',
       data: {
@@ -401,35 +403,8 @@ async function loadDashboard() {
   $('#dash-alerts').innerHTML = alerts.join('');
 
   // ----- Charts -----
-  const catLabels = Object.keys(d.expenseByCategory);
-
-  makeChart('chart-category', {
-    type: 'doughnut',
-    data: { 
-      labels: catLabels, 
-      datasets: [{ 
-        data: catLabels.map(k => d.expenseByCategory[k]), 
-        backgroundColor: NESTED_PALETTE, 
-        borderWidth: 2,
-        borderColor: '#FFFFFF'
-      }] 
-    },
-    options: { 
-      cutout: '70%', 
-      plugins: { 
-        legend: { 
-          position: 'right',
-          labels: {
-            color: '#2D3748',
-            font: { weight: 500 },
-            boxWidth: 10,
-            padding: 12
-          }
-        } 
-      } 
-    }
-  });
-
+  // (chart-category doughnut removed with the Bento redesign — expense split now
+  // lives in the Monthly Tactical view and the treemap)
   const days = Object.keys(d.dailyTrend).sort();
   const canvasDaily = $('#chart-daily');
   const ctxDaily = canvasDaily.getContext('2d');
@@ -498,95 +473,8 @@ async function loadDashboard() {
   // Render Yearly Strategic View
   renderYearlyStrategic(d);
 
-  const mt = trend;
-  const canvasMonthly = $('#chart-monthly');
-  const ctxMonthly = canvasMonthly.getContext('2d');
-  const gradMonthly = ctxMonthly.createLinearGradient(0, 0, 0, 180);
-  gradMonthly.addColorStop(0, 'rgba(42, 122, 140, 0.7)'); /* Deep Teal */
-  gradMonthly.addColorStop(1, 'rgba(42, 122, 140, 0.1)');
-
-  makeChart('chart-monthly', {
-    type: 'bar',
-    data: { 
-      labels: mt.map(x => x.month), 
-      datasets: [{ 
-        label: 'Chi tiêu', 
-        data: mt.map(x => x.expense), 
-        backgroundColor: gradMonthly, 
-        borderColor: 'rgba(42, 122, 140, 0.9)',
-        borderWidth: 1,
-        borderRadius: 6 
-      }] 
-    },
-    options: { 
-      plugins: { legend: { display: false } },
-      scales: {
-        x: {
-          grid: { color: 'rgba(0, 0, 0, 0.05)', drawBorder: false },
-          ticks: { color: '#718096' }
-        },
-        y: {
-          grid: { color: 'rgba(0, 0, 0, 0.05)', drawBorder: false },
-          ticks: { color: '#718096' }
-        }
-      }
-    }
-  });
-
-  const canvasIncExp = $('#chart-income-expense');
-  const ctxIncExp = canvasIncExp.getContext('2d');
-  
-  const gradInc = ctxIncExp.createLinearGradient(0, 0, 0, 180);
-  gradInc.addColorStop(0, 'rgba(79, 209, 165, 0.7)');
-  gradInc.addColorStop(1, 'rgba(79, 209, 165, 0.05)');
-
-  const gradExp = ctxIncExp.createLinearGradient(0, 0, 0, 180);
-  gradExp.addColorStop(0, 'rgba(243, 163, 144, 0.7)');
-  gradExp.addColorStop(1, 'rgba(243, 163, 144, 0.05)');
-
-  makeChart('chart-income-expense', {
-    type: 'bar',
-    data: { 
-      labels: mt.map(x => x.month), 
-      datasets: [
-        { 
-          label: 'Thu nhập', 
-          data: mt.map(x => x.income), 
-          backgroundColor: gradInc, 
-          borderColor: 'rgba(79, 209, 165, 0.3)',
-          borderWidth: 1,
-          borderRadius: 6 
-        },
-        { 
-          label: 'Chi tiêu', 
-          data: mt.map(x => x.expense), 
-          backgroundColor: gradExp, 
-          borderColor: 'rgba(243, 163, 144, 0.3)',
-          borderWidth: 1,
-          borderRadius: 6 
-        }
-      ] 
-    },
-    options: { 
-      plugins: { 
-        legend: { 
-          display: true,
-          position: 'top',
-          labels: { color: '#F2F7F5' }
-        } 
-      },
-      scales: {
-        x: {
-          grid: { color: 'rgba(255, 255, 255, 0.03)', drawBorder: false },
-          ticks: { color: '#8AA09A' }
-        },
-        y: {
-          grid: { color: 'rgba(255, 255, 255, 0.03)', drawBorder: false },
-          ticks: { color: '#8AA09A' }
-        }
-      }
-    }
-  });
+  // (chart-monthly and chart-income-expense removed with the Bento redesign —
+  // their canvases no longer exist; monthly trends live in the Yearly Strategic view)
 
   // ----- Budgets -----
   const budgetRow = (b) => `
