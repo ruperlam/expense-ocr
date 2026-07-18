@@ -79,7 +79,7 @@ function showPage(name) {
 $$('.nav-btn, .top-nav-link[data-page]').forEach(b => b.addEventListener('click', () => showPage(b.dataset.page)));
 
 // ---------------- Categories cache ----------------
-let CATS = { types: [], groups: [], subs: {}, incomeGroups: [], raw: [] };
+let CATS = { types: [], groups: [], subs: {}, incomeGroups: [], incomeSubs: {}, incomeParentOf: {}, raw: [] };
 async function ensureCategories() {
   if (CATS.types.length) return CATS;
   const rows = await api('getCategories', {}, { silent: true });
@@ -90,7 +90,14 @@ async function ensureCategories() {
   CATS.groups = groups.filter(r => !r.parent).map(r => r.name);
   CATS.subs = {};
   groups.filter(r => r.parent).forEach(r => (CATS.subs[r.parent] = CATS.subs[r.parent] || []).push(r.name));
-  CATS.incomeGroups = active.filter(r => r.kind === 'income_group').map(r => r.name);
+  const incomes = active.filter(r => r.kind === 'income_group');
+  CATS.incomeGroups = incomes.filter(r => !r.parent).map(r => r.name); // top-level only (e.g. Main income)
+  CATS.incomeSubs = {};
+  CATS.incomeParentOf = {};
+  incomes.filter(r => r.parent).forEach(r => {
+    (CATS.incomeSubs[r.parent] = CATS.incomeSubs[r.parent] || []).push(r.name);
+    CATS.incomeParentOf[r.name] = r.parent;
+  });
   return CATS;
 }
 function fillSelect(el, options, { empty = null, value = null } = {}) {
@@ -558,7 +565,7 @@ function refreshTxGroupSelects() {
 }
 function refreshTxSubSelect() {
   const isIncome = $('#mtx-type').value === 'Income';
-  const subs = isIncome ? [] : (CATS.subs[$('#mtx-group').value] || []);
+  const subs = (isIncome ? CATS.incomeSubs : CATS.subs)[$('#mtx-group').value] || [];
   $('#mtx-sub-wrap').hidden = subs.length === 0;
   fillSelect($('#mtx-sub'), subs, { empty: '— Không chọn —' });
 }
@@ -659,17 +666,113 @@ async function loadIncomePage() {
   $('#inc-lbl-avgprev').textContent = `Thu nhập BQ/tháng năm ${prevYear}`;
   $('#inc-kpi-avgmonth-prev').textContent = iy.prevYearIncome > 0 ? fmtVND(iy.avgMonthPrevYear) : '—';
 
-  const sources = d.incomeBySource || {};
-  const srcLabels = Object.keys(sources);
+  // ----- Scope-driven analysis (source/group doughnuts + 3 KPIs) + trend charts.
+  // Everything is computed client-side from the full Income history — one cached call.
+  await ensureCategories();
+  const allRows = await api('getTransactions', { type: 'Income', limit: 1000 }, { silent: true });
+  const allIncome = allRows.filter(r => r.transaction_type === 'Income');
 
-  const rows = await api('getTransactions', { month, limit: 500 }, { silent: true });
-  const incomeRows = rows.filter(r => r.transaction_type === 'Income' || r.transaction_type === 'Refund');
+  // Roll a row's group up to its top-level income group ('Salary'/'Bonus' → 'Main income').
+  // Fallback mapping keeps charts correct even before the backend migration has run.
+  const parentOf = Object.keys(CATS.incomeParentOf).length
+    ? CATS.incomeParentOf : { Salary: 'Main income', Bonus: 'Main income' };
+  const topGroupOf = (r) => parentOf[r.expense_group] || r.expense_group || 'Khác';
+  const isMainIncome = (r) => topGroupOf(r) === 'Main income';
 
-  makeChart('chart-income-source', {
-    type: 'doughnut',
-    data: { labels: srcLabels, datasets: [{ data: srcLabels.map(k => sources[k]), backgroundColor: NESTED_PALETTE, borderWidth: 2, borderColor: '#FFFFFF' }] },
-    options: { cutout: '70%', plugins: { legend: { position: 'right', labels: { color: '#2D3748', font: { weight: 500 }, boxWidth: 10, padding: 12 } } } }
+  const byYear = {};        // '2026' -> total VND
+  const bySrcScope = {};    // scope ('all' | '2026' | …) -> { supplier -> total }
+  const byGroupScope = {};  // scope -> { top-level income group -> total }
+  const byMonthScope = {};  // scope -> { 'YYYY-MM' -> total }
+  const employerByYear = {}; // supplier -> { year -> Main-income total (salary + bonus) }
+  allIncome.forEach(r => {
+    const ym = String(r.receipt_date || '').slice(0, 7);
+    const y = ym.slice(0, 4);
+    if (!/^\d{4}-\d{2}$/.test(ym)) return;
+    const src = r.supplier || 'Khác';
+    const grp = topGroupOf(r);
+    const amt = Number(r.total_amount) || 0;
+    byYear[y] = (byYear[y] || 0) + amt;
+    for (const scope of [y, 'all']) {
+      (bySrcScope[scope] = bySrcScope[scope] || {})[src] = (bySrcScope[scope][src] || 0) + amt;
+      (byGroupScope[scope] = byGroupScope[scope] || {})[grp] = (byGroupScope[scope][grp] || 0) + amt;
+      (byMonthScope[scope] = byMonthScope[scope] || {})[ym] = (byMonthScope[scope][ym] || 0) + amt;
+    }
+    if (isMainIncome(r)) (employerByYear[src] = employerByYear[src] || {})[y] = (employerByYear[src][y] || 0) + amt;
   });
+  const years = Object.keys(byYear).sort().reverse();
+
+  // Scope selector: current year by default; keeps the user's pick across page reloads.
+  const scopeSel = $('#inc-src-scope');
+  const prevScope = scopeSel.value;
+  scopeSel.innerHTML = ['<option value="all">Lũy kế</option>']
+    .concat(years.map(y => `<option value="${y}">Năm ${y}</option>`)).join('');
+  const curYearStr = String(new Date().getFullYear());
+  scopeSel.value = [...scopeSel.options].some(o => o.value === prevScope) ? prevScope
+    : (years.includes(curYearStr) ? curYearStr : 'all');
+
+  const doughnut = (canvasId, entries, total) => makeChart(canvasId, {
+    type: 'doughnut',
+    data: {
+      labels: entries.map(x => x.name),
+      datasets: [{ data: entries.map(x => x.amount), backgroundColor: NESTED_PALETTE, borderWidth: 2, borderColor: '#FFFFFF' }]
+    },
+    options: {
+      cutout: '70%',
+      plugins: {
+        legend: { position: 'right', labels: { color: '#2D3748', font: { weight: 500 }, boxWidth: 10, padding: 12 } },
+        tooltip: { callbacks: { label: (ctx) =>
+          ` ${ctx.label}: ${fmtVND(ctx.parsed)} (${total ? Math.round(ctx.parsed / total * 100) : 0}%)` } }
+      }
+    }
+  });
+  const rankedOf = (map, cap = 8) => {
+    const ranked = Object.keys(map).map(k => ({ name: k, amount: map[k] })).sort((a, b) => b.amount - a.amount);
+    const top = ranked.slice(0, cap);
+    const restSum = ranked.slice(cap).reduce((s, x) => s + x.amount, 0);
+    if (restSum > 0) top.push({ name: 'Khác', amount: restSum });
+    return top;
+  };
+
+  const renderScopeViews = () => {
+    const scope = scopeSel.value;
+    const scopeLabel = scope === 'all' ? 'lũy kế' : 'năm ' + scope;
+
+    // Doughnut 1: share per source (supplier)
+    const srcTop = rankedOf(bySrcScope[scope] || {});
+    const srcTotal = srcTop.reduce((s, x) => s + x.amount, 0);
+    $('#inc-src-empty').hidden = srcTotal > 0;
+    doughnut('chart-income-source', srcTop, srcTotal);
+
+    // Doughnut 2: share per top-level income group (Main income / Freelance / …)
+    const grpTop = rankedOf(byGroupScope[scope] || {});
+    doughnut('chart-income-group', grpTop, grpTop.reduce((s, x) => s + x.amount, 0));
+
+    // KPI: biggest source + concentration
+    if (srcTop.length) {
+      const pct = srcTotal ? Math.round(srcTop[0].amount / srcTotal * 100) : 0;
+      $('#inc-kpi-topsrc').textContent = srcTop[0].name;
+      $('#inc-kpi-topsrc-sub').textContent = `chiếm ${pct}% thu nhập ${scopeLabel}`;
+    } else {
+      $('#inc-kpi-topsrc').textContent = '—';
+      $('#inc-kpi-topsrc-sub').textContent = 'chưa có dữ liệu';
+    }
+
+    // KPI: best / worst month within the scope (months that HAD income)
+    const months = Object.keys(byMonthScope[scope] || {}).sort();
+    if (months.length) {
+      const best = months.reduce((a, b) => byMonthScope[scope][a] >= byMonthScope[scope][b] ? a : b);
+      const worst = months.reduce((a, b) => byMonthScope[scope][a] <= byMonthScope[scope][b] ? a : b);
+      $('#inc-kpi-best').textContent = fmtVND(byMonthScope[scope][best]);
+      $('#inc-kpi-best-sub').textContent = `tháng ${best.slice(5)}/${best.slice(0, 4)} (${scopeLabel})`;
+      $('#inc-kpi-worst').textContent = fmtVND(byMonthScope[scope][worst]);
+      $('#inc-kpi-worst-sub').textContent = `tháng ${worst.slice(5)}/${worst.slice(0, 4)} (${scopeLabel})`;
+    } else {
+      $('#inc-kpi-best').textContent = $('#inc-kpi-worst').textContent = '—';
+      $('#inc-kpi-best-sub').textContent = $('#inc-kpi-worst-sub').textContent = '';
+    }
+  };
+  scopeSel.onchange = renderScopeViews; // assignment (not addEventListener) so reloads don't stack handlers
+  renderScopeViews();
 
   makeChart('chart-income-monthly', {
     type: 'bar',
@@ -677,8 +780,82 @@ async function loadIncomePage() {
     options: { plugins: { legend: { display: false } } }
   });
 
-  $('#inc-top-sources').innerHTML = rankListHTML(d.topIncomeSources, d.kpi.monthIncome);
-  $('#inc-recent').innerHTML = incomeRows.slice(0, 10).map(txRowHTML).join('') || '<p class="muted">Chưa có giao dịch thu nhập tháng này.</p>';
+  // ----- YTD cumulative: this calendar year vs last year, month by month
+  const nowYear = new Date().getFullYear();
+  const lastYear = nowYear - 1;
+  const nowMonth = new Date().getMonth() + 1;
+  const cumSeries = (yr, upTo) => {
+    let cum = 0;
+    return Array.from({ length: 12 }, (_, i) => {
+      if (i + 1 > upTo) return null;
+      cum += (byMonthScope[String(yr)] || {})[`${yr}-${String(i + 1).padStart(2, '0')}`] || 0;
+      return cum;
+    });
+  };
+  $('#inc-ytd-title').textContent = `Lũy kế ${nowYear} so với ${lastYear}`;
+  makeChart('chart-income-ytd', {
+    type: 'line',
+    data: {
+      labels: Array.from({ length: 12 }, (_, i) => 'T' + (i + 1)),
+      datasets: [
+        { label: `Năm ${nowYear}`, data: cumSeries(nowYear, nowMonth), borderColor: '#2A7A8C', backgroundColor: 'rgba(42,122,140,0.15)', fill: true, tension: 0.3, pointRadius: 2 },
+        { label: `Năm ${lastYear}`, data: cumSeries(lastYear, 12), borderColor: '#E6B5A1', backgroundColor: 'transparent', borderDash: [6, 4], fill: false, tension: 0.3, pointRadius: 2 }
+      ]
+    },
+    options: {
+      plugins: { legend: { display: true, position: 'top' } },
+      scales: { y: { ticks: { callback: (v) => (v / 1000000) + 'tr' } } }
+    }
+  });
+
+  // ----- Total income per year (VND), % growth vs previous year in the tooltip
+  const yearsAsc = [...years].reverse();
+  makeChart('chart-income-yearly', {
+    type: 'bar',
+    data: {
+      labels: yearsAsc,
+      datasets: [{ label: 'Tổng thu nhập', data: yearsAsc.map(y => byYear[y]), backgroundColor: 'rgba(42, 122, 140, 0.6)', borderColor: 'rgba(42, 122, 140, 0.9)', borderWidth: 1, borderRadius: 8, maxBarThickness: 72 }]
+    },
+    options: {
+      plugins: {
+        legend: { display: false },
+        tooltip: { callbacks: { label: (ctx) => {
+          const i = ctx.dataIndex;
+          const prevVal = i > 0 ? ctx.dataset.data[i - 1] : null;
+          const growth = prevVal ? ` · ${ctx.parsed.y >= prevVal ? '+' : ''}${Math.round((ctx.parsed.y - prevVal) / prevVal * 100)}% so với năm trước` : '';
+          return ` ${fmtVND(ctx.parsed.y)}${growth}`;
+        } } }
+      },
+      scales: { y: { ticks: { callback: (v) => (v / 1000000) + 'tr' } } }
+    }
+  });
+
+  // ----- Employer comparison: Main income (salary + bonus) per company per year
+  const employers = Object.keys(employerByYear)
+    .sort((a, b) => {
+      const sum = (m) => Object.values(m).reduce((s, v) => s + v, 0);
+      return sum(employerByYear[b]) - sum(employerByYear[a]);
+    });
+  makeChart('chart-income-employer', {
+    type: 'bar',
+    data: {
+      labels: yearsAsc,
+      datasets: employers.map((emp, i) => ({
+        label: emp,
+        data: yearsAsc.map(y => employerByYear[emp][y] || 0),
+        backgroundColor: NESTED_PALETTE[i % NESTED_PALETTE.length],
+        borderRadius: 6,
+        maxBarThickness: 56
+      }))
+    },
+    options: {
+      plugins: {
+        legend: { display: true, position: 'top' },
+        tooltip: { callbacks: { label: (ctx) => ` ${ctx.dataset.label}: ${fmtVND(ctx.parsed.y)}` } }
+      },
+      scales: { y: { ticks: { callback: (v) => (v / 1000000) + 'tr' } } }
+    }
+  });
 }
 $('#inc-month').addEventListener('change', () => loadIncomePage().catch(e => toast(e.message)));
 $('#btn-inc-add').addEventListener('click', () => openTxModal('Income').catch(e => toast(e.message)));
@@ -1329,7 +1506,7 @@ async function deleteDebtRow(debtId) {
 // CATEGORIES / RULES / SETTINGS / LOGS
 // ============================================================
 async function loadCategoriesPage() {
-  CATS = { types: [], groups: [], subs: {}, incomeGroups: [], raw: [] };
+  CATS = { types: [], groups: [], subs: {}, incomeGroups: [], incomeSubs: {}, incomeParentOf: {}, raw: [] };
   await ensureCategories();
   const idOf = (kind, name, parent) => {
     const r = CATS.raw.find(x => x.kind === kind && x.name === name && String(x.parent || '') === (parent || ''));
@@ -1339,11 +1516,17 @@ async function loadCategoriesPage() {
     `<span class="chip">${esc(name)}<button class="chip-del" title="Xóa" data-id="${esc(idOf(kind, name, parent))}" data-name="${esc(name)}">×</button></span>`;
 
   $('#cat-types').innerHTML = CATS.types.map(t => chip('transaction_type', t)).join('') || '<p class="muted">Chưa có.</p>';
-  $('#cat-incomes').innerHTML = CATS.incomeGroups.map(g => chip('income_group', g)).join('') || '<p class="muted">Chưa có.</p>';
+  $('#cat-incomes').innerHTML = CATS.incomeGroups.map(g => `
+    <div class="cat-group-row">
+      <div class="cat-group-head">${chip('income_group', g)}
+        <button class="btn small btn-cat-add-sub" data-kind="income_group" data-group="${esc(g)}">＋ Danh mục con</button>
+      </div>
+      <div class="chip-list cat-sub-list">${(CATS.incomeSubs[g] || []).map(sc => chip('income_group', sc, g)).join('') || '<span class="muted" style="font-size:12px">Chưa có danh mục con</span>'}</div>
+    </div>`).join('') || '<p class="muted">Chưa có.</p>';
   $('#cat-groups-tree').innerHTML = CATS.groups.map(g => `
     <div class="cat-group-row">
       <div class="cat-group-head">${chip('expense_group', g)}
-        <button class="btn small btn-cat-add-sub" data-group="${esc(g)}">＋ Danh mục con</button>
+        <button class="btn small btn-cat-add-sub" data-kind="expense_group" data-group="${esc(g)}">＋ Danh mục con</button>
       </div>
       <div class="chip-list cat-sub-list">${(CATS.subs[g] || []).map(sc => chip('expense_group', sc, g)).join('') || '<span class="muted" style="font-size:12px">Chưa có danh mục con</span>'}</div>
     </div>`).join('');
@@ -1355,9 +1538,9 @@ async function loadCategoriesPage() {
     catch (e) { toast('Lỗi: ' + e.message); }
   }));
   $$('#page-categories .btn-cat-add-sub').forEach(b => b.addEventListener('click', async () => {
-    const name = prompt(`Tên danh mục con cho "${b.dataset.group}":\n(VD: Breakfast, Lunch, Dinner, Cafe)`);
+    const name = prompt(`Tên danh mục con cho "${b.dataset.group}":\n(VD: Breakfast, Lunch — hoặc Salary, Bonus cho nhóm thu nhập)`);
     if (!name || !name.trim()) return;
-    try { await api('saveCategory', { kind: 'expense_group', name: name.trim(), parent: b.dataset.group }); toast('Đã thêm.'); loadCategoriesPage(); }
+    try { await api('saveCategory', { kind: b.dataset.kind || 'expense_group', name: name.trim(), parent: b.dataset.group }); toast('Đã thêm.'); loadCategoriesPage(); }
     catch (e) { toast('Lỗi: ' + e.message); }
   }));
 }

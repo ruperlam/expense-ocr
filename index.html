@@ -34,7 +34,7 @@
 <!-- ============ SIDEBAR (desktop) / BOTTOM NAV (mobile) ============ -->
 <nav id="nav">
   <div class="brand">
-    <span class="brand-name">Sổ Chi Tiêu (vnd)<span class="brand-sub">Personal Finance OS · v0.4.12</span></span>
+    <span class="brand-name">Sổ Chi Tiêu (vnd)<span class="brand-sub">Personal Finance OS · v0.4.14</span></span>
   </div>
 
   <button class="nav-btn" data-page="transactions">
@@ -397,22 +397,72 @@
         </div>
       </div>
 
-      <div class="card bento-item bento-item-md-6 bento-item-lg-4">
+      <!-- ===== Scope-driven analysis: the selector below drives the 3 KPIs + 2 doughnuts ===== -->
+      <h2 class="bento-item bento-item-md-12" style="margin-top: 16px; margin-bottom: 0; padding-bottom: 8px; border-bottom: 1px solid var(--border-soft); font-size: 16px; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+        <span>Phân tích nguồn thu</span>
+        <select id="inc-src-scope" class="input" style="width:auto; min-width:130px; margin:0; font-size:13px; padding:6px 10px;"></select>
+      </h2>
+
+      <div class="kpi-card bento-item bento-item-sm-6 bento-item-md-4">
+        <span class="kpi-ico ico-blue">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="4"></circle></svg>
+        </span>
+        <div class="kpi-meta">
+          <label>Nguồn thu lớn nhất</label>
+          <strong id="inc-kpi-topsrc">—</strong>
+          <span class="delta flat" id="inc-kpi-topsrc-sub">mức độ phụ thuộc nguồn thu</span>
+        </div>
+      </div>
+      <div class="kpi-card bento-item bento-item-sm-6 bento-item-md-4">
+        <span class="kpi-ico ico-mint">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>
+        </span>
+        <div class="kpi-meta">
+          <label>Tháng cao nhất</label>
+          <strong id="inc-kpi-best" class="money income">—</strong>
+          <span class="delta flat" id="inc-kpi-best-sub"></span>
+        </div>
+      </div>
+      <div class="kpi-card bento-item bento-item-sm-6 bento-item-md-4">
+        <span class="kpi-ico ico-peach">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline><polyline points="17 18 23 18 23 12"></polyline></svg>
+        </span>
+        <div class="kpi-meta">
+          <label>Tháng thấp nhất</label>
+          <strong id="inc-kpi-worst" class="money">—</strong>
+          <span class="delta flat" id="inc-kpi-worst-sub"></span>
+        </div>
+      </div>
+
+      <div class="card bento-item bento-item-md-6 bento-item-lg-6">
         <h2>Thu nhập theo nguồn</h2>
         <canvas id="chart-income-source"></canvas>
+        <p class="muted" id="inc-src-empty" hidden>Chưa có dữ liệu thu nhập cho lựa chọn này.</p>
       </div>
-      <div class="card bento-item bento-item-md-6 bento-item-lg-8">
+      <div class="card bento-item bento-item-md-6 bento-item-lg-6">
+        <h2>Thu nhập theo nhóm</h2>
+        <canvas id="chart-income-group"></canvas>
+      </div>
+
+      <!-- ===== Trends ===== -->
+      <h2 class="bento-item bento-item-md-12" style="margin-top: 16px; margin-bottom: 0; padding-bottom: 8px; border-bottom: 1px solid var(--border-soft); font-size: 16px;">Xu hướng</h2>
+
+      <div class="card bento-item bento-item-md-6 bento-item-lg-6">
         <h2>Xu hướng thu nhập theo tháng (12 tháng)</h2>
         <canvas id="chart-income-monthly"></canvas>
       </div>
-
-      <div class="card bento-item bento-item-md-6 bento-item-lg-5">
-        <h2>Top nguồn thu</h2>
-        <div id="inc-top-sources"></div>
+      <div class="card bento-item bento-item-md-6 bento-item-lg-6">
+        <h2 id="inc-ytd-title">Lũy kế YTD so với năm trước</h2>
+        <canvas id="chart-income-ytd"></canvas>
       </div>
-      <div class="card bento-item bento-item-md-6 bento-item-lg-7">
-        <h2>Giao dịch thu nhập gần đây</h2>
-        <div id="inc-recent" class="tx-list"></div>
+
+      <div class="card bento-item bento-item-md-6 bento-item-lg-6">
+        <h2>Tổng thu nhập theo năm</h2>
+        <canvas id="chart-income-yearly"></canvas>
+      </div>
+      <div class="card bento-item bento-item-md-6 bento-item-lg-6">
+        <h2>So sánh công ty (lương + bonus theo năm)</h2>
+        <canvas id="chart-income-employer"></canvas>
       </div>
     </div>
   </section>
@@ -900,6 +950,6 @@
 <div id="toast" hidden></div>
 <div id="loader" hidden><div class="spinner"></div><p id="loader-text">Đang xử lý…</p></div>
 
-<script src="app.js?v=11"></script>
+<script src="app.js?v=13"></script>
 </body>
 </html>
