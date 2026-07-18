@@ -8,11 +8,27 @@
 const CFG_KEY = 'expense_ocr_cfg';
 const cfg = JSON.parse(localStorage.getItem(CFG_KEY) || '{}');
 
-async function api(action, payload = {}, { silent = false } = {}) {
+// Read-only actions are cached for a short window so switching tabs re-renders
+// instantly instead of re-hitting Apps Script (~1-3s per call). Any write action
+// clears the whole cache, so views never show stale data after an edit.
+const API_CACHE_TTL_MS = 60 * 1000;
+const API_READ_ACTIONS = new Set([
+  'getDashboard', 'getTransactions', 'getPendingReviews', 'getDraft',
+  'getBudgets', 'getCategories', 'getRules', 'getLogs', 'getSettings',
+  'getDebts', 'getDebtPayments', 'getDebtDashboard', 'getDebtSchedule'
+]);
+const apiCache = new Map(); // cacheKey -> { t, data }
+
+async function api(action, payload = {}, { silent = false, fresh = false } = {}) {
   if (!cfg.url || !cfg.token) {
     toast('Chưa cấu hình kết nối. Vào mục Cài đặt để nhập URL và token.');
     showPage('settings');
     throw new Error('Not configured');
+  }
+  const cacheKey = API_READ_ACTIONS.has(action) ? action + ':' + JSON.stringify(payload) : null;
+  if (cacheKey && !fresh) {
+    const hit = apiCache.get(cacheKey);
+    if (hit && Date.now() - hit.t < API_CACHE_TTL_MS) return hit.data;
   }
   if (!silent) loader(true);
   try {
@@ -23,6 +39,8 @@ async function api(action, payload = {}, { silent = false } = {}) {
     });
     const json = await res.json();
     if (!json.ok) throw new Error(json.error || 'Unknown API error');
+    if (cacheKey) apiCache.set(cacheKey, { t: Date.now(), data: json.data });
+    else apiCache.clear(); // write action → drop every cached read
     return json.data;
   } finally {
     if (!silent) loader(false);
@@ -138,20 +156,23 @@ function setHealthScore(score, label) {
 function renderWeeklyHeatmap(dailyTrend) {
   const container = $('#weekly-heatmap');
   if (!container) return;
-  const days = Object.keys(dailyTrend || {}).sort();
-  if (!days.length) { container.innerHTML = '<p class="muted">Không có dữ liệu</p>'; return; }
-  
-  // Build 7 columns (days of week)
+  dailyTrend = dailyTrend || {};
+  if (!Object.keys(dailyTrend).length) { container.innerHTML = '<p class="muted">Không có dữ liệu</p>'; return; }
+
+  // Always render the last 28 calendar days (missing days = 0) so the grid is a
+  // full 4×7 block instead of a sparse row of only the days that had expenses.
+  const recentDays = [];
+  for (let i = 27; i >= 0; i--) {
+    recentDays.push(new Date(Date.now() - i * 86400000).toISOString().slice(0, 10));
+  }
+
   const gridHtml = ['<div class="heatmap-grid">'];
-  
-  // Fill the grid with the last 28 days (4 weeks)
-  const recentDays = days.slice(-28);
-  
+
   // Calculate max to find intensity
-  const maxExpense = Math.max(...recentDays.map(d => dailyTrend[d]), 1);
-  
+  const maxExpense = Math.max(...recentDays.map(d => dailyTrend[d] || 0), 1);
+
   recentDays.forEach(day => {
-    const val = dailyTrend[day];
+    const val = dailyTrend[day] || 0;
     const pct = val / maxExpense;
     let level = 0;
     if (pct > 0.75) level = 4;

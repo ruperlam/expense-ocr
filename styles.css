@@ -66,9 +66,11 @@ body {
 /* ============================================================
    TOP NAVIGATION
    ============================================================ */
+/* Base = desktop (≥1280px). Tablet 900–1279px and mobile <900px each override
+   these in their own @media blocks below — tune each device tier separately. */
 #top-nav {
   display: flex; justify-content: space-between; align-items: center;
-  position: fixed; top: 0; left: 224px; right: 0; height: 80px;
+  position: fixed; top: 0; left: 224px; right: 0; height: 56px;
   padding: 0 40px; color: var(--text-inverse); z-index: 40;
 }
 .top-nav-left .btn-back {
@@ -173,17 +175,32 @@ body {
     gap: 6px; padding: 20px 14px; border-radius: var(--radius-lg);
   }
   .brand { padding: 4px 6px 20px 10px; font-size: 17px; margin-bottom: 10px; border: none; }
-  #main { 
-    margin-left: 224px; margin-top: 80px; margin-right: 16px; margin-bottom: 16px; 
-    padding: 32px 40px 60px; 
-    border-radius: 32px; 
+  #main {
+    margin-left: 224px; margin-top: 60px; margin-right: 16px; margin-bottom: 16px;
+    padding: 32px 40px 60px;
+    border-radius: 32px;
     background: var(--bg-main);
-    height: calc(100vh - 96px);
-    height: calc(100dvh - 96px);
+    height: calc(100vh - 76px);
+    height: calc(100dvh - 76px);
     overflow-y: auto;
     box-shadow: -10px 0 30px rgba(0,0,0,0.1);
-    transition: margin-left 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); 
+    transition: margin-left 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
   }
+
+/* ---------- Tablet landscape / small laptop (900–1279px), e.g. iPad ---------- */
+@media (min-width: 900px) and (max-width: 1279px) {
+  #top-nav {
+    height: 48px;
+    padding: 0 24px;
+  }
+  .top-nav-link { font-size: 13px; padding: 6px 0; }
+  #main {
+    margin-top: 52px;
+    padding: 24px 28px 48px;
+    height: calc(100vh - 68px);
+    height: calc(100dvh - 68px);
+  }
+}
 
 /* ---------- Mobile & Tablet Portrait (bottom nav) ---------- */
 @media (max-width: 899px) {
